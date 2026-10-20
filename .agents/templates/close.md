@@ -32,5 +32,6 @@ closed: YYYY-MM-DD
 # Merge
 
 - [ ] ACs merged into `specs/<capability>.md`
+- [ ] `runbooks/<unit>.md` updated if operations changed (deploy, rollback, config, alerts)
 - [ ] New candidate slices added to the idea
 - [ ] Slice folder moved to `archive/`

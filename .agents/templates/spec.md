@@ -4,6 +4,8 @@ title: <short title>
 status: draft   # draft | ready | red | green | done
 idea: I-XXX
 capability: <capability>   # living spec this slice merges into: specs/<capability>.md
+change: added   # added | changed | deprecated | removed | fixed | security
+breaking: false # true | false | [<unit>, ...] when only some release units break
 ---
 
 # Goal
