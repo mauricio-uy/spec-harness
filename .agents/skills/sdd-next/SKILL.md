@@ -22,13 +22,13 @@ Dispatcher over the slice lifecycle. Invoking it after a checkpoint counts as th
 1. **Pick the slice**: the ID the user gave; otherwise the only open slice in `sdd.py status`; otherwise ask which one.
 2. **Read its status** with `sdd.py status <ID>` and act:
 
-| Status | Action                                          | Then                                   |
-|--------|-------------------------------------------------|----------------------------------------|
-| draft  | Activate `sdd-spec`                             | Stop at its checkpoint (spec review)   |
-| ready  | Activate `sdd-red`                              | Stop at its checkpoint (test review)   |
-| red    | Activate `sdd-green`                            | Continue with `sdd-close` on success   |
-| green  | Activate `sdd-close`                            | Stop at its checkpoint (release)       |
-| done   | Nothing to advance                              | Propose the top candidate from `sdd-status` |
+   | Status | Action               | Then                                        |
+   |--------|----------------------|---------------------------------------------|
+   | draft  | Activate `sdd-spec`  | Stop at its checkpoint (spec review)        |
+   | ready  | Activate `sdd-red`   | Stop at its checkpoint (test review)        |
+   | red    | Activate `sdd-green` | Continue with `sdd-close` on success        |
+   | green  | Activate `sdd-close` | Stop at its checkpoint (release)            |
+   | done   | Nothing to advance   | Propose the top candidate from `sdd-status` |
 
 3. If there is no open slice, propose promoting the top idea candidate with `sdd-spec`, or capturing a new idea with `sdd-idea`.
 

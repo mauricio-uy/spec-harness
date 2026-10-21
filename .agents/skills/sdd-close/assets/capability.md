@@ -7,20 +7,22 @@ capability: <capability>
 <!-- Living spec: how the system behaves today for this capability.
      Updated only when a slice closes. Describes behavior, not history. -->
 
-# Behaviors
+## Behaviors
 
 <!-- Grouped by topic. Each behavior keeps its origin ID so it can be traced to its tests. -->
 
-## <Topic>
+### <Topic>
 
 - **S-XXX/AC-1:** Given <context>, when <action>, then <observable result>.
 
-# Contracts
+## Contracts
 
 <!-- Interfaces this capability exposes or consumes, and who owns each. -->
 
 -
 
-# Constraints
+## Constraints
+
+<!-- Rules that always hold for this capability. Cite the ADR behind each one. -->
 
 -

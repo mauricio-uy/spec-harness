@@ -17,6 +17,7 @@ CLI = HARNESS / "bin" / "sdd.py"
 ASSETS = {
     "spec": HARNESS / "skills" / "sdd-spec" / "assets" / "spec.md",
     "adr": HARNESS / "skills" / "sdd-adr" / "assets" / "adr.md",
+    "idea": HARNESS / "skills" / "sdd-idea" / "assets" / "idea.md",
 }
 
 _spec = importlib.util.spec_from_file_location("sdd", CLI)
@@ -372,6 +373,12 @@ class IndexTest(HarnessTest):
         self.ok("index")
         self.assertIn("[S-001](changes/S-001-greet/spec.md) draft", self.repo.read(".agents/docs/index.md"))
         self.ok("index", "--check")
+
+    def test_index_lists_open_ideas_from_template(self):
+        text = ASSETS["idea"].read_text(encoding="utf-8").replace("I-XXX", "I-001").replace("<short title>", "Onboarding")
+        self.repo.write(".agents/docs/ideas/I-001-onboarding.md", text)
+        self.ok("index")
+        self.assertIn("- [I-001](ideas/I-001-onboarding.md) Onboarding · 1 pending candidate\n", self.repo.read(".agents/docs/index.md"))
 
     def test_index_links_context_documents(self):
         self.repo.write(".agents/docs/overview.md", "# System\n")

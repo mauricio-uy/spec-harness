@@ -27,9 +27,9 @@ Read-only overview of the work. Never edit files from this skill.
    - slices in progress, one line each, with what blocks them;
    - the recommended next action: the slice closest to done first, then the top candidate.
 
-| Status | Next skill  | Waiting for                          |
-|--------|-------------|--------------------------------------|
-| draft  | `sdd-spec`  | spec completion, open questions      |
-| ready  | `sdd-red`   | user approval of the spec            |
+| Status | Next skill  | Waiting for                           |
+|--------|-------------|---------------------------------------|
+| draft  | `sdd-spec`  | spec completion, open questions       |
+| ready  | `sdd-red`   | user approval of the spec             |
 | red    | `sdd-green` | user approval of the acceptance tests |
-| green  | `sdd-close` | close and release                    |
+| green  | `sdd-close` | close and release                     |

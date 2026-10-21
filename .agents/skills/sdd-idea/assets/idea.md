@@ -1,7 +1,7 @@
 ---
 id: I-XXX
 title: <short title>
-status: open | done | dropped
+status: open   # open | done | dropped
 ---
 
 # Problem
@@ -29,7 +29,7 @@ status: open | done | dropped
 
 <!-- Status: candidate | specced | done | dropped -->
 
-## Debt and follow-ups
+# Debt and follow-ups
 
 <!-- Added by closed slices. Promote to a candidate when worth doing. -->
 

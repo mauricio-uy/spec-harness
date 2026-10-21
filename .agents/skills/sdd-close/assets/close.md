@@ -7,8 +7,8 @@ closed: YYYY-MM-DD
 
 <!-- One row per AC. Any change since `ready` must be explained. -->
 
-| AC   | Status                       | Test         | Notes |
-|------|------------------------------|--------------|-------|
+| AC   | Status                        | Test          | Notes |
+|------|-------------------------------|---------------|-------|
 | AC-1 | delivered / changed / dropped | `<test name>` |       |
 
 # Deviations
@@ -19,7 +19,7 @@ closed: YYYY-MM-DD
 
 # Debt
 
-<!-- Shortcuts taken, with a follow-up slice ID if one was created. -->
+<!-- Shortcuts taken, and where each is tracked (the idea's "Debt and follow-ups", or here only). -->
 
 -
 

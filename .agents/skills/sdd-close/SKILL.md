@@ -28,7 +28,7 @@ Record what was delivered, fold it into the living spec and release it. With con
    - When a criterion replaces an existing behavior, update or remove the old entry; the living spec describes today, not history.
    - Add new contracts and constraints.
 3. **Runbooks**: if the slice changed how a release unit is deployed, rolled back, configured or monitored, update `.agents/docs/runbooks/<unit>.md` (`root.md` without units).
-4. **Idea**: if the slice came from one, set its candidate to `done` and add debt or follow-ups under "Debt and follow-ups".
+4. **Idea**: if the slice came from one, set its candidate to `done` and add debt or follow-ups under "Debt and follow-ups". A standalone slice records its debt in `close.md` only.
 5. **Context**: update `.agents/docs/overview.md` if the slice added a component, a release unit or a stack change. Check that new names in the code match `.agents/docs/glossary.md`, and add missing terms.
 6. Tick every merge item in `close.md` (`n/a` where it does not apply) and run `sdd.py advance <ID>`. The slice moves to `.agents/docs/archive/` and the index is regenerated.
 

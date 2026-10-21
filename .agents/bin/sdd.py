@@ -448,7 +448,8 @@ def build_index() -> str:
         front, _ = parse_front(text)
         if front.get("status", "open") == "open":
             pending = len(re.findall(r"^\|\s*C\d+\s*\|.*\|\s*candidate\s*\|\s*$", text, re.M))
-            ideas.append(f"- [{front.get('id', path.stem)}]({link(path)}) {front.get('title', '')} · {pending} candidates pending")
+            count = f"{pending} pending candidate" + ("" if pending == 1 else "s")
+            ideas.append(f"- [{front.get('id', path.stem)}]({link(path)}) {front.get('title', '')} · {count}")
     runbooks = [f"- [{path.stem}]({link(path)})" for path in doc_files("runbooks")]
     context = [f"- [{name}]({name}.md)" for name in ("overview", "glossary") if (DOCS / f"{name}.md").exists()]
 
