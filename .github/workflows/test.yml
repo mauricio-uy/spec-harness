@@ -24,3 +24,13 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Run CLI tests
         run: python -m unittest discover -s tests -v
+
+  # Single required check for branch rules, independent of the matrix.
+  all:
+    name: tests
+    if: always()
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every matrix job to pass
+        run: test "${{ needs.test.result }}" = "success"
