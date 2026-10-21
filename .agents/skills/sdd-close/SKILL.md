@@ -13,8 +13,8 @@ Record what was delivered, fold it into the living spec and release it. With con
 
 ## Harness
 
-- Workspace: `.agents/` with `ideas/`, `changes/` (open slices), `archive/` (closed slices), `specs/` (living spec), `adr/`, `runbooks/`.
-- CLI: `python3 .agents/bin/sdd.py <command>` (use `python` on Windows if `python3` is missing).
+- Docs: `.agents/docs/` with `index.md` (generated map: read it first), `ideas/`, `changes/` (open slices), `archive/` (closed slices), `specs/` (living spec), `adr/`, `runbooks/`.
+- CLI: `python3 .agents/bin/sdd.py <command>` (use `python` on Windows if `python3` is missing). Run `sdd.py init` once per project.
 - The CLI owns the `status` field: never edit it by hand.
 
 ## Steps
@@ -22,13 +22,13 @@ Record what was delivered, fold it into the living spec and release it. With con
 1. **close.md**: copy [the close template](assets/close.md) into the slice folder and fill it:
    - one row per criterion (including struck ones) with its status and test;
    - deviations from spec and plan, debt and learnings, briefly.
-2. **Living spec**: merge every active criterion into `.agents/specs/<capability>.md`, creating it from [the capability template](assets/capability.md) if needed.
+2. **Living spec**: merge every active criterion into `.agents/docs/specs/<capability>.md`, creating it from [the capability template](assets/capability.md) if needed.
    - Keep the origin ID: `- **S-012/AC-1:** Given …`.
    - When a criterion replaces an existing behavior, update or remove the old entry; the living spec describes today, not history.
    - Add new contracts and constraints.
-3. **Runbooks**: if the slice changed how a release unit is deployed, rolled back, configured or monitored, update `.agents/runbooks/<unit>.md` (`root.md` without units).
+3. **Runbooks**: if the slice changed how a release unit is deployed, rolled back, configured or monitored, update `.agents/docs/runbooks/<unit>.md` (`root.md` without units).
 4. **Idea**: if the slice came from one, set its candidate to `done` and add debt or follow-ups under "Debt and follow-ups".
-5. Tick every merge item in `close.md` (`n/a` where it does not apply) and run `sdd.py advance <ID>`. The slice moves to `.agents/archive/`.
+5. Tick every merge item in `close.md` (`n/a` where it does not apply) and run `sdd.py advance <ID>`. The slice moves to `.agents/docs/archive/` and the index is regenerated.
 
 ## Release
 

@@ -13,8 +13,8 @@ Make the frozen acceptance tests pass with the simplest design that satisfies th
 
 ## Harness
 
-- Workspace: `.agents/` with `ideas/`, `changes/` (open slices), `archive/` (closed slices), `specs/` (living spec), `adr/`, `runbooks/`.
-- CLI: `python3 .agents/bin/sdd.py <command>` (use `python` on Windows if `python3` is missing).
+- Docs: `.agents/docs/` with `index.md` (generated map: read it first), `ideas/`, `changes/` (open slices), `archive/` (closed slices), `specs/` (living spec), `adr/`, `runbooks/`.
+- CLI: `python3 .agents/bin/sdd.py <command>` (use `python` on Windows if `python3` is missing). Run `sdd.py init` once per project.
 - The CLI owns the `status` field: never edit it by hand.
 
 ## Rules

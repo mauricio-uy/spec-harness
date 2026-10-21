@@ -13,8 +13,8 @@ Turn each acceptance criterion into an executable test that fails for the right 
 
 ## Harness
 
-- Workspace: `.agents/` with `ideas/`, `changes/` (open slices), `archive/` (closed slices), `specs/` (living spec), `adr/`, `runbooks/`.
-- CLI: `python3 .agents/bin/sdd.py <command>` (use `python` on Windows if `python3` is missing).
+- Docs: `.agents/docs/` with `index.md` (generated map: read it first), `ideas/`, `changes/` (open slices), `archive/` (closed slices), `specs/` (living spec), `adr/`, `runbooks/`.
+- CLI: `python3 .agents/bin/sdd.py <command>` (use `python` on Windows if `python3` is missing). Run `sdd.py init` once per project.
 - The CLI owns the `status` field: never edit it by hand.
 
 ## Setup
@@ -30,7 +30,7 @@ full = "pytest"            # the whole suite
 
 ## Steps
 
-1. Read `.agents/changes/<ID>-*/spec.md`: criteria, boundaries and constraints.
+1. Read `.agents/docs/changes/<ID>-*/spec.md`: criteria, boundaries and constraints. The user approved the spec, and with it every ADR in its `adrs` field: run `sdd.py accept <ADR>` for each one still `proposed`.
 2. Write the tests in **dedicated files for this slice**, following the project's test conventions (for example `tests/acceptance/test_s012_reset_password.py`). The gate freezes whole files, so do not mix them with other tests.
 3. One or more tests per active criterion. Each test:
    - carries the tag `<ID>/AC-n` in its name, a marker or a comment next to it;

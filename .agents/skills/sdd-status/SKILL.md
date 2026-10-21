@@ -13,14 +13,14 @@ Read-only overview of the work. Never edit files from this skill.
 
 ## Harness
 
-- Workspace: `.agents/` with `ideas/`, `changes/` (open slices), `archive/` (closed slices), `specs/` (living spec), `adr/`, `runbooks/`.
-- CLI: `python3 .agents/bin/sdd.py <command>` (use `python` on Windows if `python3` is missing).
+- Docs: `.agents/docs/` with `index.md` (generated map: read it first), `ideas/`, `changes/` (open slices), `archive/` (closed slices), `specs/` (living spec), `adr/`, `runbooks/`.
+- CLI: `python3 .agents/bin/sdd.py <command>` (use `python` on Windows if `python3` is missing). Run `sdd.py init` once per project.
 
 ## Steps
 
-1. Run `sdd.py status` to list open slices with their status and next skill.
+1. Run `sdd.py status` to list open slices with their status and next skill. It also warns about slices that follow a superseded ADR and about a stale index.
 2. For a specific slice, run `sdd.py status <ID>`: it shows its criteria and the static checks of its next gate. Tests are not run; `sdd.py check <ID>` runs them when the user wants a full verdict.
-3. Read `.agents/ideas/*.md` with `status: open` and list candidates still marked `candidate`.
+3. Read `.agents/docs/index.md` for open ideas, proposed decisions and pending candidates.
 4. Answer briefly:
    - slices in progress, one line each, with what blocks them;
    - the recommended next action: the slice closest to done first, then the top candidate.

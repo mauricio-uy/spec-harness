@@ -13,12 +13,12 @@ Turn a loose idea into an idea document with an ordered list of candidate slices
 
 ## Harness
 
-- Workspace: `.agents/` with `ideas/`, `changes/` (open slices), `archive/` (closed slices), `specs/` (living spec), `adr/`, `runbooks/`.
-- CLI: `python3 .agents/bin/sdd.py <command>` (use `python` on Windows if `python3` is missing).
+- Docs: `.agents/docs/` with `index.md` (generated map: read it first), `ideas/`, `changes/` (open slices), `archive/` (closed slices), `specs/` (living spec), `adr/`, `runbooks/`.
+- CLI: `python3 .agents/bin/sdd.py <command>` (use `python` on Windows if `python3` is missing). Run `sdd.py init` once per project.
 
 ## Steps
 
-1. Get an ID with `sdd.py next-id idea` and copy [the idea template](assets/idea.md) to `.agents/ideas/<ID>-<slug>.md`. The slug is short kebab-case.
+1. Get an ID with `sdd.py next-id idea` and copy [the idea template](assets/idea.md) to `.agents/docs/ideas/<ID>-<slug>.md`. The slug is short kebab-case.
 2. Fill **Problem**, **Outcome** and **Non-goals** from what the user said. Ask only for what is missing, all questions in one message.
 3. Decompose into candidate slices, labelled `C1`, `C2`… Each candidate:
    - is one user-observable behavior, described in one sentence without "and";
@@ -30,7 +30,7 @@ Turn a loose idea into an idea document with an ordered list of candidate slices
    - **Interfaces**: one channel first (API), others later (UI).
    - **Data**: one data type or subset first.
    - **Rules**: base rule first, exceptions later.
-5. Remove every template comment and placeholder, then show the candidate table to the user.
+5. Remove every template comment and placeholder, run `sdd.py index`, then show the candidate table to the user.
 
 ## Rules
 

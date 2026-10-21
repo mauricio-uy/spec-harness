@@ -6,6 +6,7 @@ idea: I-XXX
 capability: <capability>   # living spec this slice merges into: specs/<capability>.md
 change: added   # added | changed | deprecated | removed | fixed | security
 breaking: false # true | false | [<unit>, ...] when only some release units break
+adrs: []        # decisions this slice follows, e.g. [ADR-003]
 ---
 
 # Goal
@@ -43,7 +44,8 @@ breaking: false # true | false | [<unit>, ...] when only some release units brea
 
 # Constraints
 
-<!-- Only the ones that apply: performance, security, compatibility, limits. Delete if none. -->
+<!-- Only the ones that apply: performance, security, compatibility, limits.
+     Cite the ADR behind a constraint, e.g. "Paginate with cursors (ADR-003)". Delete if none. -->
 
 -
 
