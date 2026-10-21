@@ -1,6 +1,7 @@
 ---
 name: sdd-idea
 description: Captures a product idea and decomposes it into candidate vertical slices. Use when the user brings a problem, feature request or initiative larger than a single slice, or asks to break work down before specifying it.
+license: MIT
 compatibility: Requires git and Python 3.11+. Expects the spec-harness CLI at .agents/bin/sdd.py.
 metadata:
   source: github.com/mauricio-uy/spec-harness

@@ -1,6 +1,7 @@
 ---
 name: sdd-green
 description: Implements a slice whose acceptance tests are red, using test-driven development until they and the full suite pass. Use when a slice is in red status with approved acceptance tests, or when asked to implement a slice.
+license: MIT
 compatibility: Requires git and Python 3.11+. Expects the spec-harness CLI at .agents/bin/sdd.py.
 metadata:
   source: github.com/mauricio-uy/spec-harness

@@ -1,6 +1,7 @@
 ---
 name: sdd-adr
 description: Records a decision that constrains more than one slice as an architecture decision record, replaces an outdated one, and plans the slices needed to bring existing code in line. Use when a cross-cutting technical or product decision is made or proposed, inside or outside a slice.
+license: MIT
 compatibility: Requires git and Python 3.11+. Expects the spec-harness CLI at .agents/bin/sdd.py.
 metadata:
   source: github.com/mauricio-uy/spec-harness

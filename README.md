@@ -57,7 +57,7 @@ The skills follow the [Agent Skills](https://agentskills.io/specification) stand
 
 Requirements: git and Python 3.11 or later, on Linux, macOS or Windows. There are no dependencies to install.
 
-1. Copy the `.agents/` folder of this repository into the root of your project.
+1. Copy the `.agents/` folder of this repository into the root of your project. It includes its `LICENSE`; keep it with the copy.
 2. Point your agent client at `.agents/skills/`. Client-specific adapters are not provided yet.
 3. Run the `sdd-init` skill.
 
@@ -99,3 +99,7 @@ python3 -m unittest discover -s tests
 ```
 
 The CI runs the suite on Linux, macOS and Windows with Python 3.11 and 3.14.
+
+## License
+
+[MIT](LICENSE)
