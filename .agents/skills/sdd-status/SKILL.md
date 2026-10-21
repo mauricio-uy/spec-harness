@@ -3,7 +3,7 @@ name: sdd-status
 description: Reports the state of spec-driven work, including open slices, their lifecycle status, failing gates, pending idea candidates and the next action. Use when the user asks what is in progress, what comes next, or why a slice cannot advance.
 compatibility: Requires git and Python 3.11+. Expects the spec-harness CLI at .agents/bin/sdd.py.
 metadata:
-  author: spec-harness
+  source: github.com/mauricio-uy/spec-harness
   version: "0.1.0"
 ---
 

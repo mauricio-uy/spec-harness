@@ -3,7 +3,7 @@ name: sdd-close
 description: Closes a green slice by writing close.md, merging its acceptance criteria into the living capability spec, checking runbooks, archiving it, and creating the changelog entry, release commit and tags. Use when a slice is green, or when asked to finish, ship or release a slice.
 compatibility: Requires git and Python 3.11+. Expects the spec-harness CLI at .agents/bin/sdd.py.
 metadata:
-  author: spec-harness
+  source: github.com/mauricio-uy/spec-harness
   version: "0.1.0"
 ---
 

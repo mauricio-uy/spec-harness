@@ -3,7 +3,7 @@ name: sdd-next
 description: Moves a slice forward to its next lifecycle phase by activating the matching sdd skill, stopping at human checkpoints. Use when the user says next, continue or advance on a slice, or wants to move spec-driven work forward without naming the phase.
 compatibility: Requires git and Python 3.11+. Expects the spec-harness CLI at .agents/bin/sdd.py and the other sdd-* skills.
 metadata:
-  author: spec-harness
+  source: github.com/mauricio-uy/spec-harness
   version: "0.1.0"
 ---
 

@@ -3,7 +3,7 @@ name: sdd-spec
 description: Writes or amends the spec of one vertical slice and takes it from draft to ready, covering scope, boundaries, Given/When/Then acceptance criteria and an optional plan. Use when starting a slice from an idea candidate or a small request, or when an in-progress slice's spec or acceptance tests must change.
 compatibility: Requires git and Python 3.11+. Expects the spec-harness CLI at .agents/bin/sdd.py.
 metadata:
-  author: spec-harness
+  source: github.com/mauricio-uy/spec-harness
   version: "0.1.0"
 ---
 

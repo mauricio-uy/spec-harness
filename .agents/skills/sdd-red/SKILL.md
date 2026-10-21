@@ -3,7 +3,7 @@ name: sdd-red
 description: Writes the failing acceptance tests of a ready slice, at least one per acceptance criterion, and freezes them. Use when a slice spec is ready and approved, or when asked to write acceptance tests for a slice.
 compatibility: Requires git and Python 3.11+. Expects the spec-harness CLI at .agents/bin/sdd.py.
 metadata:
-  author: spec-harness
+  source: github.com/mauricio-uy/spec-harness
   version: "0.1.0"
 ---
 

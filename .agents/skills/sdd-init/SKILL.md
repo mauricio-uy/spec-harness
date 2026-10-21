@@ -3,7 +3,7 @@ name: sdd-init
 description: Sets up spec-driven development in a project by writing the system overview and glossary, configuring tests and release units, adding the harness block to AGENTS.md and generating the docs index. Use when installing the harness in a new or existing project, or when the overview or glossary is missing or outdated.
 compatibility: Requires git and Python 3.11+. Expects the spec-harness CLI at .agents/bin/sdd.py.
 metadata:
-  author: spec-harness
+  source: github.com/mauricio-uy/spec-harness
   version: "0.1.0"
 ---
 
