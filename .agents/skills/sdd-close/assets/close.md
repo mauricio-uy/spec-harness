@@ -31,7 +31,8 @@ closed: YYYY-MM-DD
 
 # Merge
 
-- [ ] ACs merged into `specs/<capability>.md`
-- [ ] `runbooks/<unit>.md` updated if operations changed (deploy, rollback, config, alerts)
-- [ ] New candidate slices added to the idea
-- [ ] Slice folder moved to `archive/`
+<!-- Tick every item; write "n/a" after an item that does not apply. -->
+
+- [ ] ACs merged into the living capability spec
+- [ ] Runbook of each affected release unit updated if operations changed (deploy, rollback, config, alerts)
+- [ ] Debt and new candidate slices added to the idea
