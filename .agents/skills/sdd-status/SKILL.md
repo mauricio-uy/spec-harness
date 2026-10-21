@@ -1,0 +1,33 @@
+---
+name: sdd-status
+description: Reports the state of spec-driven work, including open slices, their lifecycle status, failing gates, pending idea candidates and the next action. Use when the user asks what is in progress, what comes next, or why a slice cannot advance.
+compatibility: Requires git and Python 3.11+. Expects the spec-harness CLI at .agents/bin/sdd.py.
+metadata:
+  author: spec-harness
+  version: "0.1.0"
+---
+
+# sdd-status
+
+Read-only overview of the work. Never edit files from this skill.
+
+## Harness
+
+- Workspace: `.agents/` with `ideas/`, `changes/` (open slices), `archive/` (closed slices), `specs/` (living spec), `adr/`, `runbooks/`.
+- CLI: `python3 .agents/bin/sdd.py <command>` (use `python` on Windows if `python3` is missing).
+
+## Steps
+
+1. Run `sdd.py status` to list open slices with their status and next skill.
+2. For a specific slice, run `sdd.py status <ID>`: it shows its criteria and the static checks of its next gate. Tests are not run; `sdd.py check <ID>` runs them when the user wants a full verdict.
+3. Read `.agents/ideas/*.md` with `status: open` and list candidates still marked `candidate`.
+4. Answer briefly:
+   - slices in progress, one line each, with what blocks them;
+   - the recommended next action: the slice closest to done first, then the top candidate.
+
+| Status | Next skill  | Waiting for                          |
+|--------|-------------|--------------------------------------|
+| draft  | `sdd-spec`  | spec completion, open questions      |
+| ready  | `sdd-red`   | user approval of the spec            |
+| red    | `sdd-green` | user approval of the acceptance tests |
+| green  | `sdd-close` | close and release                    |
