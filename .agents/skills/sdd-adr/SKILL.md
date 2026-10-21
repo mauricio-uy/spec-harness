@@ -13,8 +13,9 @@ Capture why a cross-cutting decision was taken, how far it reaches, and what it 
 
 ## Harness
 
-- Docs: `.agents/docs/` with `index.md` (generated map: read it first), `ideas/`, `changes/` (open slices), `archive/` (closed slices), `specs/` (living spec), `adr/`, `runbooks/`.
-- CLI: `python3 .agents/bin/sdd.py <command>` (use `python` on Windows if `python3` is missing). Run `sdd.py init` once per project.
+- Docs: `.agents/docs/` with `overview.md` and `glossary.md` (system context and vocabulary: read them first), `index.md` (generated map), `ideas/`, `changes/` (open slices), `archive/` (closed slices), `specs/` (living spec), `adr/`, `runbooks/`.
+- CLI: `python3 .agents/bin/sdd.py <command>` (use `python` on Windows if `python3` is missing). Set the harness up once per project with `sdd-init`.
+- Reference harness documents by ID (`S-012`, `S-012/AC-1`, `ADR-003`), never by path.
 - The CLI owns the `status`, `date` and `superseded_by` fields: never edit them by hand.
 
 ## Steps
@@ -28,7 +29,8 @@ Capture why a cross-cutting decision was taken, how far it reaches, and what it 
    - `scope`: the capabilities and release units it constrains, or `[all]`.
    - `supersedes`: the ADR it replaces, if any.
 4. **Follow-up**: if existing code must change to comply, activate `sdd-idea` to create an idea with one candidate per affected capability, and write its ID here. An ADR never changes code itself; each candidate goes through the normal slice lifecycle.
-5. Run `sdd.py index`.
+5. If the decision changes the architecture or the stack, update `.agents/docs/overview.md`.
+6. Run `sdd.py index`.
 
 ## Acceptance
 

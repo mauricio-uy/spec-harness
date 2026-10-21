@@ -12,6 +12,7 @@ Commands (run from anywhere inside the repository):
   advance SLICE             check the gate and move the slice to the next status
   reopen SLICE              send a slice back to draft and unfreeze its acceptance tests
   accept ADR                accept a proposed ADR and supersede the one it replaces
+  lint                      check links, ID references, AC-to-test traceability and vocabulary
   next-id {idea,slice,adr}  print the next free ID
   release SLICE [--apply] [--trailer TEXT]...
                             plan (or apply) changelog entries, release commit and tags
@@ -46,6 +47,7 @@ import subprocess
 import tomllib
 from datetime import date
 from pathlib import Path
+from urllib.parse import unquote
 
 STATUSES = ["draft", "ready", "red", "green", "done"]
 NEXT_SKILL = {"draft": "sdd-spec", "ready": "sdd-red", "red": "sdd-green", "green": "sdd-close"}
@@ -79,11 +81,17 @@ AGENTS_BLOCK = f"""{AGENTS_BEGIN}
 
 <!-- Managed by .agents/bin/sdd.py: edit outside these markers. -->
 
+- Read `.agents/docs/overview.md` for what the system is, and use the vocabulary in `.agents/docs/glossary.md`.
 - System behavior, accepted decisions and work in progress are indexed in `.agents/docs/index.md`. Read it before changing behavior.
 - Follow the accepted ADRs listed there.
 - Behavior changes go through a slice, using the `sdd-*` skills in `.agents/skills/`.
 - Never edit acceptance tests listed in a slice's `.frozen.json`.
+- Reference harness documents by ID (`S-012`, `S-012/AC-1`, `ADR-003`), never by path.
 {AGENTS_END}"""
+ID_RE = re.compile(r"\b(?:S|I|ADR)-\d{3,}\b")
+TAG_RE = re.compile(r"\b(S-\d+)/AC-(\d+)\b")
+LIVING_AC_RE = re.compile(r"\*\*(S-\d+)/AC-(\d+):\*\*")
+LINK_RE = re.compile(r"\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
 
 ROOT = Path()
 AGENTS = Path()
@@ -442,10 +450,11 @@ def build_index() -> str:
             pending = len(re.findall(r"^\|\s*C\d+\s*\|.*\|\s*candidate\s*\|\s*$", text, re.M))
             ideas.append(f"- [{front.get('id', path.stem)}]({link(path)}) {front.get('title', '')} · {pending} candidates pending")
     runbooks = [f"- [{path.stem}]({link(path)})" for path in doc_files("runbooks")]
+    context = [f"- [{name}]({name}.md)" for name in ("overview", "glossary") if (DOCS / f"{name}.md").exists()]
 
     text = INDEX_HEADER
     for title, rows in (
-        ("Capabilities", capabilities), ("Decisions (accepted)", decisions["accepted"]),
+        ("Context", context), ("Capabilities", capabilities), ("Decisions (accepted)", decisions["accepted"]),
         ("Decisions (proposed)", decisions["proposed"]), ("Open slices", slices),
         ("Open ideas", ideas), ("Runbooks", runbooks),
     ):
@@ -524,6 +533,126 @@ def cmd_accept(args, config) -> int:
     write_index()
     print(f"{adr} is now accepted" + (f"; {old} is superseded" if old else ""))
     return 0
+
+
+def is_text(path: Path) -> bool:
+    try:
+        with path.open("rb") as f:
+            return b"\0" not in f.read(1024)
+    except OSError:
+        return False
+
+
+def numbered_lines(path: Path):
+    """Yield (line number, line); in Markdown, skip code fences, HTML comments and the managed AGENTS.md block."""
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    if path.suffix.lower() != ".md":
+        yield from enumerate(text.splitlines(), 1)
+        return
+    blank = lambda m: "\n" * m.group(0).count("\n")
+    text = re.sub(re.escape(AGENTS_BEGIN) + r".*?" + re.escape(AGENTS_END), blank, text, flags=re.S)
+    text = COMMENT_RE.sub(blank, text)
+    fenced = False
+    for number, line in enumerate(text.splitlines(), 1):
+        if line.lstrip().startswith(("```", "~~~")):
+            fenced = not fenced
+        elif not fenced:
+            yield number, line
+
+
+def broken_link(source: Path, target: str) -> bool:
+    if target.startswith("#") or re.match(r"[a-z][a-z0-9+.-]*:", target, re.I):
+        return False
+    target = unquote(target.split("#")[0].split("?")[0])
+    if not target:
+        return False
+    resolved = ROOT / target.lstrip("/") if target.startswith("/") else source.parent / target
+    return not resolved.exists()
+
+
+def known_ids() -> set[str]:
+    ids = set()
+    for folder, prefix in (("ideas", "I"), ("changes", "S"), ("archive", "S"), ("adr", "ADR")):
+        if (DOCS / folder).is_dir():
+            ids |= {m.group(0) for path in (DOCS / folder).iterdir() if (m := re.match(rf"{prefix}-\d+", path.name))}
+    return ids
+
+
+def glossary_aliases() -> dict[str, str]:
+    """Map each alias in the glossary's Avoid column to its term."""
+    path = DOCS / "glossary.md"
+    aliases = {}
+    for _, line in numbered_lines(path) if path.exists() else ():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if not line.lstrip().startswith("|") or len(cells) < 4 or cells[0] in ("", "Term") or "<" in cells[0]:
+            continue
+        if set(cells[0]) <= set("-: "):
+            continue
+        aliases |= {alias.strip().lower(): cells[0] for alias in cells[3].split(",") if alias.strip()}
+    return aliases
+
+
+def cmd_lint(args, config) -> int:
+    errors, warnings = [], []
+
+    def where(path: Path, number: int) -> str:
+        return f"{path.relative_to(ROOT).as_posix()}:{number}"
+
+    # Links and ID references, in harness docs and across the repository.
+    ids = known_ids()
+    docs = sorted(DOCS.rglob("*.md")) if DOCS.is_dir() else []
+    for path in docs + [p for p in walk(ROOT) if is_text(p)]:
+        for number, line in numbered_lines(path):
+            errors += [f"{where(path, number)}: unknown reference {ref}" for ref in ID_RE.findall(line) if ref not in ids]
+            if path.suffix.lower() == ".md":
+                links = LINK_RE.findall(re.sub(r"`[^`]*`", "", line))
+                errors += [f"{where(path, number)}: broken link {target}" for target in links if broken_link(path, target)]
+
+    # Traceability between the living spec and the tests.
+    living = {}
+    for path in doc_files("specs"):
+        for number, line in numbered_lines(path):
+            living |= {(s, int(n)): where(path, number) for s, n in LIVING_AC_RE.findall(line)}
+    open_acs = {(sl.id, n) for sl in open_slices() for n, _ in sl.acs}
+    tags: dict[tuple[str, int], list[str]] = {}
+    for base in config.get("tests", {}).get("paths", ["."]):
+        for path in (p for p in walk(ROOT / base) if is_text(p)):
+            for number, line in numbered_lines(path):
+                for s, n in TAG_RE.findall(line):
+                    tags.setdefault((s, int(n)), []).append(where(path, number))
+    for (s, n), places in sorted(tags.items()):
+        if (s, n) not in living and (s, n) not in open_acs:
+            errors += [f"{place}: test references {s}/AC-{n}, which is neither in the living spec nor in an open slice" for place in places]
+    errors += [f"{place}: {s}/AC-{n} has no test tagged with it" for (s, n), place in sorted(living.items()) if (s, n) not in tags]
+
+    # Decisions and vocabulary.
+    adrs = load_adrs()
+    for sl in open_slices():
+        for ref in sl.adrs():
+            if ref in adrs and adrs[ref][1].get("status") == "superseded":
+                warnings.append(f"{sl.spec.relative_to(ROOT).as_posix()}: follows {ref}, which is superseded")
+    aliases = glossary_aliases()
+    for path in [DOCS / "overview.md", *doc_files("specs"), *(sl.spec for sl in open_slices())]:
+        if not path.exists():
+            continue
+        for number, line in numbered_lines(path):
+            for alias, term in aliases.items():
+                if re.search(rf"\b{re.escape(alias)}\b", line, re.I):
+                    warnings.append(f"{where(path, number)}: '{alias}' is a glossary alias; use '{term}'")
+
+    # Generated files.
+    if not index_is_current():
+        errors.append(".agents/docs/index.md is stale: run `sdd.py index`")
+    path, text = agents_md()
+    if with_agents_block(text) != text:
+        errors.append(f"{path.name} lacks the current sdd block: run `sdd.py init`")
+
+    for error in errors:
+        print(f"error: {error}")
+    for warning in warnings:
+        print(f"warning: {warning}")
+    print(f"{len(errors)} error(s), {len(warnings)} warning(s)")
+    return 1 if errors else 0
 
 
 def cmd_status(args, config) -> int:
@@ -710,6 +839,7 @@ def main() -> int:
     for name in ("check", "advance", "reopen"):
         commands.add_parser(name).add_argument("slice")
     commands.add_parser("accept").add_argument("adr")
+    commands.add_parser("lint")
     commands.add_parser("next-id").add_argument("kind", choices=["idea", "slice", "adr"])
     release = commands.add_parser("release")
     release.add_argument("slice")
@@ -722,7 +852,7 @@ def main() -> int:
     DOCS = AGENTS / "docs"
     handlers = {
         "init": cmd_init, "index": cmd_index, "status": cmd_status, "check": cmd_check,
-        "advance": cmd_advance, "reopen": cmd_reopen, "accept": cmd_accept,
+        "advance": cmd_advance, "reopen": cmd_reopen, "accept": cmd_accept, "lint": cmd_lint,
         "next-id": cmd_next_id, "release": cmd_release,
     }
     return handlers[args.command](args, load_config())

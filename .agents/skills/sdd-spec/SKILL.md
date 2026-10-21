@@ -13,8 +13,9 @@ Produce a spec that states **what** the slice does and how to know it is done, p
 
 ## Harness
 
-- Docs: `.agents/docs/` with `index.md` (generated map: read it first), `ideas/`, `changes/` (open slices), `archive/` (closed slices), `specs/` (living spec), `adr/`, `runbooks/`.
-- CLI: `python3 .agents/bin/sdd.py <command>` (use `python` on Windows if `python3` is missing). Run `sdd.py init` once per project.
+- Docs: `.agents/docs/` with `overview.md` and `glossary.md` (system context and vocabulary: read them first), `index.md` (generated map), `ideas/`, `changes/` (open slices), `archive/` (closed slices), `specs/` (living spec), `adr/`, `runbooks/`.
+- CLI: `python3 .agents/bin/sdd.py <command>` (use `python` on Windows if `python3` is missing). Set the harness up once per project with `sdd-init`.
+- Reference harness documents by ID (`S-012`, `S-012/AC-1`, `ADR-003`), never by path.
 - The CLI owns the `status` and `base` fields: never edit them by hand.
 
 ## New slice
@@ -35,8 +36,9 @@ Produce a spec that states **what** the slice does and how to know it is done, p
 3. **Explore the code** before filling **Boundaries**: find the entry point (Input), the observable result (Output), the modules it touches and the contracts it relies on. Write `none` where nothing applies.
 4. **Out** is never empty: list what a reader could expect but is excluded.
 5. **Acceptance criteria**: 1–6, each `- **AC-n:** Given …, when …, then …`, observable from the boundary, never from internals. For a bug (`change: fixed`), one criterion reproduces it.
-6. Collect every doubt in **Open questions**, ask the user all of them in one message, and fold the answers back into the spec until the section is empty.
-7. If the slice exceeds 6 criteria or its goal needs "and", split it: keep the first part here and add the rest as candidates to the idea.
+6. **Vocabulary**: use the glossary's terms, never its Avoid aliases. When the slice introduces a domain term, add it to `.agents/docs/glossary.md`.
+7. Collect every doubt in **Open questions**, ask the user all of them in one message, and fold the answers back into the spec until the section is empty.
+8. If the slice exceeds 6 criteria or its goal needs "and", split it: keep the first part here and add the rest as candidates to the idea.
 
 ## Plan
 
