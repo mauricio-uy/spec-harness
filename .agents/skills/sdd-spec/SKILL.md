@@ -17,18 +17,19 @@ Produce a spec that states **what** the slice does and how to know it is done, p
 - Docs: `.agents/docs/` with `overview.md` and `glossary.md` (system context and vocabulary: read them first), `index.md` (generated map), `ideas/`, `changes/` (open slices), `archive/` (closed slices), `specs/` (living spec), `adr/`, `runbooks/`.
 - CLI: `python3 .agents/bin/sdd.py <command>` (use `python` on Windows if `python3` is missing). Set the harness up once per project with `sdd-init`.
 - Reference harness documents by ID (`S-012`, `S-012/AC-1`, `ADR-003`), never by path.
-- The CLI owns the `status` and `base` fields: never edit them by hand.
+- The CLI owns the `status` field: never edit it by hand.
 
 ## New slice
 
-1. Get an ID with `sdd.py next-id slice`, create `.agents/docs/changes/<ID>-<slug>/` and copy [the spec template](assets/spec.md) into it as `spec.md`.
-2. Fill the front matter:
+1. Get an ID with `sdd.py next-id slice`. It also counts `slice/*` branches, so create the slice branch right away from an up-to-date `main`: `git switch -c slice/<ID>-<slug>`. A slice is one branch and one pull request; skip the branch only if the user commits directly to `main`.
+2. Create `.agents/docs/changes/<ID>-<slug>/` and copy [the spec template](assets/spec.md) into it as `spec.md`.
+3. Fill the front matter:
    - `idea`: the source idea, or remove the line for a standalone request.
    - `capability`: an existing file name in `.agents/docs/specs/` when one fits; otherwise a new short kebab-case name.
    - `change`: `added` | `changed` | `deprecated` | `removed` | `fixed` | `security`.
    - `breaking`: `true` only if an existing contract stops working for its consumers; a list of release units if only some break.
-3. If promoted from an idea, write the slice ID in the candidate's row and set its status to `specced`.
-4. Run `sdd.py index`.
+4. If promoted from an idea, write the slice ID in the candidate's row and set its status to `specced`.
+5. Run `sdd.py index`.
 
 ## Writing the spec
 

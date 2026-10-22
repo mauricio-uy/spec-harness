@@ -1,6 +1,6 @@
 ---
 name: sdd-init
-description: Sets up spec-driven development in a project by writing the system overview and glossary, configuring tests and release units, adding the harness block to AGENTS.md and generating the docs index. Use when installing the harness in a new or existing project, or when the overview or glossary is missing or outdated.
+description: Sets up spec-driven development in a project by writing the system overview and glossary, configuring tests, release units and the release workflow, adding the harness block to AGENTS.md and generating the docs index. Use when installing the harness in a new or existing project, or when the overview or glossary is missing or outdated.
 license: MIT
 compatibility: Requires git and Python 3.11+. Expects the spec-harness CLI at .agents/bin/sdd.py.
 metadata:
@@ -32,9 +32,15 @@ Give every agent working on the project a shared base: what the system is, the w
 5. **Configuration**: propose `.agents/config.toml` to the user:
    - `[tests]`: the project's test runner, for the slice's acceptance tests (`{files}`) and the full suite.
    - `[[units]]`: one per independently released package or service; omit for a single release unit.
-6. Run `sdd.py init`: it adds the harness block to `AGENTS.md` (between `sdd:begin`/`sdd:end` markers, leaving the rest untouched) and generates the index.
-7. Run `sdd.py lint` and fix what it reports.
-8. **Checkpoint**: show the user the overview, glossary and configuration for review.
+6. **Releases**: each slice is one branch and one squash-merged pull request, released after the merge. On GitHub, propose:
+   - copying [the release workflow](assets/release.yml) to `.github/workflows/release.yml`;
+   - squash merging with the pull request title and description as the commit message;
+   - if `main` is protected, letting GitHub Actions bypass the protection so the workflow can push release commits and tags.
+
+   Without the workflow, releases run locally after each merge: `sdd.py release --apply`, then `git push --follow-tags`.
+7. Run `sdd.py init`: it adds the harness block to `AGENTS.md` (between `sdd:begin`/`sdd:end` markers, leaving the rest untouched) and generates the index.
+8. Run `sdd.py lint` and fix what it reports.
+9. **Checkpoint**: show the user the overview, glossary, configuration and release setup for review.
 
 ## Rules
 
