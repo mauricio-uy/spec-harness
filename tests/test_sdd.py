@@ -508,5 +508,55 @@ class LintTest(HarnessTest):
         self.assertIn("warning: .agents/docs/overview.md:3: 'customer' is a glossary alias; use 'Account'", out)
 
 
+class VerifyTest(HarnessTest):
+    def setUp(self):
+        super().setUp()
+        self.ok("init")
+        self.repo.git("add", "-A")
+        self.repo.git("commit", "-qm", "chore: set up the harness")
+        self.base = self.repo.git("rev-parse", "HEAD").strip()
+
+    def commit(self) -> None:
+        self.repo.git("add", "-A")
+        self.repo.git("commit", "-qm", "wip")
+
+    def test_clean_project_passes(self):
+        self.ok("verify")
+
+    def test_detects_modified_frozen_test(self):
+        self.new_slice()
+        self.to_red()
+        test = self.write_test()
+        self.repo.write(test, self.repo.read(test) + "# tampered\n")
+        self.assertIn("S-001 (red): frozen acceptance test modified", self.fails("verify"))
+
+    def test_detects_spec_degraded_after_ready(self):
+        folder = self.new_slice()
+        self.ok("advance", "S-001")
+        spec = f"{folder}/spec.md"
+        self.repo.write(spec, self.repo.read(spec).replace("# Open questions\n\n-", "# Open questions\n\n- Which locale?"))
+        self.assertIn("S-001 (ready): open questions remain", self.fails("verify"))
+
+    def test_rejects_non_conventional_title(self):
+        self.assertIn("not a Conventional Commit subject", self.fails("verify", "--title", "Add greeting"))
+
+    def test_pull_request_that_closes_its_slice(self):
+        self.new_slice()
+        self.to_done()
+        self.commit()
+        title, body = self.ok("pr", "S-001", "--title").strip(), self.ok("pr", "S-001", "--body")
+        self.ok("verify", "--base", self.base, "--title", title, "--body", body)
+        out = self.fails("verify", "--base", self.base, "--title", "fix(greeting): greet users", "--body", body)
+        self.assertIn("should start with 'feat(greeting):' for S-001", out)
+        out = self.ok("verify", "--base", self.base, "--title", title, "--body", "Greets users.")
+        self.assertIn("lacks the 'Slice: S-001' trailer", out)
+
+    def test_pull_request_that_leaves_its_slice_open(self):
+        self.new_slice()
+        self.ok("advance", "S-001")
+        self.commit()
+        self.assertIn("S-001 is still open (ready)", self.fails("verify", "--base", self.base))
+
+
 if __name__ == "__main__":
     unittest.main()
