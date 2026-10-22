@@ -1,6 +1,6 @@
 ---
 name: sdd-close
-description: Closes a green slice by writing close.md, merging its acceptance criteria into the living capability spec, checking runbooks, archiving it, and creating the changelog entry, release commit and tags. Use when a slice is green, or when asked to finish, ship or release a slice.
+description: Closes a green slice by writing close.md, merging its acceptance criteria into the living capability spec, checking runbooks, archiving it, and opening its pull request; the release follows the merge. Use when a slice is green, or when asked to finish, ship or release a slice.
 license: MIT
 compatibility: Requires git and Python 3.11+. Expects the spec-harness CLI at .agents/bin/sdd.py.
 metadata:
@@ -10,7 +10,7 @@ metadata:
 
 # sdd-close
 
-Record what was delivered, fold it into the living spec and release it. With continuous deployment, every closed slice is a release.
+Record what was delivered, fold it into the living spec and hand the slice over as one pull request. With continuous deployment, every merged slice is a release.
 
 ## Harness
 
@@ -33,23 +33,27 @@ Record what was delivered, fold it into the living spec and release it. With con
 5. **Context**: update `.agents/docs/overview.md` if the slice added a component, a release unit or a stack change. Check that new names in the code match `.agents/docs/glossary.md`, and add missing terms.
 6. Tick every merge item in `close.md` (`n/a` where it does not apply) and run `sdd.py advance <ID>`. The slice moves to `.agents/docs/archive/` and the index is regenerated.
 
-## Release
+## Pull request
 
 1. Run `sdd.py lint` and fix every error: broken links, unknown IDs, tests without a criterion, criteria without a test.
-2. Run `sdd.py release <ID>` (dry run). It shows the conventional commit message, the version bump and tag per affected release unit, and the changelog files to update.
-3. Stage the slice's changes with explicit paths (code, tests, `.agents/` documents). Check `git status` for unrelated changes and leave them unstaged.
-4. **Checkpoint**: show the user the dry run and the staged files, and wait for confirmation.
-5. Run `sdd.py release <ID> --apply`, adding `--trailer "<text>"` for each commit trailer the project requires. It writes the changelogs, commits and creates annotated tags.
-6. Do not push unless the user asks; pushing the tags is what triggers deployment.
+2. Commit the remaining changes on the slice branch with explicit paths (code, tests, `.agents/` documents). Leave unrelated changes out.
+3. Run `sdd.py pr <ID>`. It prints the pull request title (a Conventional Commit subject built from the spec) and body: goal, acceptance criteria, notes from `close.md`, and the `Slice:` trailer last.
+4. **Checkpoint**: show the user the title, the body and the branch's changes, and wait for confirmation.
+5. Push the branch and open the pull request with exactly that title and body, e.g. `gh pr create --title "$(sdd.py pr <ID> --title)" --body "$(sdd.py pr <ID> --body)"`. Do not edit the trailers.
+6. Do not merge unless the user asks.
 
-## Release units
+## Release
 
-Units are declared in `.agents/config.toml`. Without units, the whole repository is one unit tagged `vX.Y.Z`.
+Releases happen after the merge, on `main`, never on the slice branch:
+
+- Merge with **squash**, using the pull request title and body as the commit message, so the `Slice:` trailer reaches `main`. A direct commit to `main` that archives the slice works too.
+- The release workflow (proposed by `sdd-init`) runs `sdd.py release --apply` on every push to `main`. Without it, run it locally after `git pull`, then `git push --follow-tags`.
+- For each slice merged since the last release, it bumps the version of every release unit whose files changed, adds the changelog entry, commits `chore(release): <tags>` and creates the tags.
+
+Release units are declared in `.agents/config.toml`. Without units, the whole repository is one unit tagged `vX.Y.Z`.
 
 ```toml
 [[units]]
 name = "api"
 paths = ["services/api"]   # tags api/vX.Y.Z, changelog in services/api/CHANGELOG.md
 ```
-
-Affected units come from the files changed since the slice became ready.

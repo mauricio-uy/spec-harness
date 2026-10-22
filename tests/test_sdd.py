@@ -214,11 +214,13 @@ class FrontMatterTest(unittest.TestCase):
     def test_changelog_puts_newest_release_first(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "CHANGELOG.md"
-            sdd.write_changelog(path, "0.1.0", "Added", "- first")
-            sdd.write_changelog(path, "0.2.0", "Fixed", "- second")
+            sdd.write_changelog(path, "0.1.0", {"Added": ["- first"]})
+            sdd.write_changelog(path, "0.2.0", {"Fixed": ["- third"], "Added": ["- second"]})
             text = path.read_text(encoding="utf-8")
         self.assertTrue(text.startswith("# Changelog"))
         self.assertLess(text.index("## [0.2.0]"), text.index("## [0.1.0]"))
+        self.assertIn("## [0.2.0]", text)
+        self.assertLess(text.index("- second"), text.index("### Fixed"))
 
 
 class LifecycleTest(HarnessTest):
@@ -226,6 +228,12 @@ class LifecycleTest(HarnessTest):
         self.assertEqual(self.ok("next-id", "slice").strip(), "S-001")
         self.new_slice("S-001")
         self.assertEqual(self.ok("next-id", "slice").strip(), "S-002")
+
+    def test_next_id_counts_slice_branches(self):
+        self.repo.git("branch", "slice/S-004-local")
+        self.assertEqual(self.ok("next-id", "slice").strip(), "S-005")
+        self.repo.git("update-ref", "refs/remotes/origin/slice/S-007-remote", "HEAD")
+        self.assertEqual(self.ok("next-id", "slice").strip(), "S-008")
 
     def test_unfilled_template_fails_ready_gate(self):
         self.repo.write(".agents/docs/changes/S-001-x/spec.md", ASSETS["spec"].read_text(encoding="utf-8"))
@@ -237,13 +245,6 @@ class LifecycleTest(HarnessTest):
         folder = self.new_slice()
         self.repo.write(f"{folder}/spec.md", self.repo.read(f"{folder}/spec.md").replace("# Open questions\n\n-", "# Open questions\n\n- Which locale?"))
         self.assertIn("open questions remain", self.fails("advance", "S-001"))
-
-    def test_ready_records_base_commit(self):
-        folder = self.new_slice()
-        self.ok("advance", "S-001")
-        front, _ = sdd.parse_front(self.repo.read(f"{folder}/spec.md"))
-        self.assertEqual(front["status"], "ready")
-        self.assertEqual(front["base"], self.repo.git("rev-parse", "HEAD").strip())
 
     def test_red_requires_tagged_tests_that_fail(self):
         folder = self.new_slice()
@@ -288,38 +289,106 @@ class LifecycleTest(HarnessTest):
         self.assertIn("status: draft", self.repo.read(f"{folder}/spec.md"))
 
 
-class ReleaseTest(HarnessTest):
-    def test_release_root_unit(self):
+class PullRequestTest(HarnessTest):
+    def test_title_and_body_come_from_the_spec(self):
+        self.new_slice(change="changed", breaking="true")
+        self.to_done()
+        self.assertEqual(self.ok("pr", "S-001", "--title"), "feat(greeting)!: greet users by name\n")
+        body = self.ok("pr", "S-001", "--body")
+        self.assertTrue(body.startswith("Users can be greeted by name.\n\n## Acceptance criteria\n"))
+        self.assertIn('- S-001/AC-1: Given the name "Ana", when greet is called', body)
+        self.assertNotIn("## Notes", body)
+        self.assertTrue(body.endswith("\n\nBREAKING CHANGE: Users can be greeted by name.\nSlice: S-001\n"))
+
+    def test_body_carries_notes_from_close(self):
         self.new_slice()
         self.to_done()
+        close = ".agents/docs/archive/S-001-greet/close.md"
+        self.repo.write(close, self.repo.read(close) + "\n# Deviations\n\n- Kept the old helper\n\n# Debt\n\n- none\n")
+        body = self.ok("pr", "S-001", "--body")
+        self.assertIn("## Notes\n\n- Deviation: Kept the old helper\n", body)
+        self.assertNotIn("Debt:", body)
+        self.assertTrue(body.endswith("\n\nSlice: S-001\n"))
+
+    def test_requires_a_closed_slice(self):
+        self.new_slice()
+        self.assertIn("close it with sdd-close", self.fails("pr", "S-001"))
+
+
+class ReleaseTest(HarnessTest):
+    def merge(self, sid="S-001", message: str | None = None) -> str:
+        """Commit the slice the way a squash merge of its pull request would."""
         self.repo.git("add", "-A")
-        self.ok("release", "S-001", "--apply", "--trailer", "Reviewed-by: Someone")
-        self.assertIn("v0.1.0", self.repo.git("tag", "--list").split())
+        self.repo.git("commit", "-q", "-m", message or self.ok("pr", sid))
+        return self.repo.git("rev-parse", "HEAD").strip()
+
+    def ship(self, sid: str) -> str:
+        self.repo.write("app/greet.py", STUB)
+        self.new_slice(sid)
+        self.to_done(sid)
+        return self.merge(sid)
+
+    def test_release_after_squash_merge(self):
+        squash = self.ship("S-001")
+        self.ok("release", "--apply", "--trailer", "Reviewed-by: Someone")
+        head = self.repo.git("rev-parse", "HEAD").strip()
+        self.assertEqual(self.repo.git("rev-parse", "HEAD^").strip(), squash)
+        self.assertEqual(self.repo.git("rev-list", "-n1", "v0.1.0").strip(), head)
+        message = self.repo.git("log", "-1", "--format=%B")
+        self.assertTrue(message.startswith("chore(release): v0.1.0\n\nReleases S-001.\n"))
+        self.assertIn("Reviewed-by: Someone", message)
         changelog = self.repo.read("CHANGELOG.md")
         self.assertIn("## [0.1.0]", changelog)
         self.assertIn("### Added", changelog)
         self.assertIn("(.agents/docs/archive/S-001-greet/spec.md)", changelog)
-        message = self.repo.git("log", "-1", "--format=%B")
-        self.assertTrue(message.startswith("feat(greeting): greet users by name"))
-        self.assertIn("Slice: S-001", message)
-        self.assertIn("Reviewed-by: Someone", message)
+        self.assertIn("nothing to release", self.ok("release", "--apply"))
 
-    def test_release_bumps_only_affected_units(self):
+    def test_each_merge_released_on_its_own(self):
+        self.ship("S-001")
+        self.ok("release", "--apply")
+        self.ship("S-002")
+        self.ok("release", "--apply")
+        self.assertEqual(self.repo.git("tag", "--list").split(), ["v0.1.0", "v0.2.0"])
+        changelog = self.repo.read("CHANGELOG.md")
+        self.assertLess(changelog.index("[S-002]"), changelog.index("## [0.1.0]"))
+
+    def test_merges_pending_together_share_one_release(self):
+        self.ship("S-001")
+        self.ship("S-002")
+        out = self.ok("release", "--apply")
+        self.assertIn("released v0.1.0", out)
+        self.assertEqual(self.repo.git("tag", "--list").split(), ["v0.1.0"])
+        self.assertIn("(S-001, S-002)", self.repo.git("tag", "-n1", "v0.1.0"))
+        changelog = self.repo.read("CHANGELOG.md")
+        self.assertIn("[S-001]", changelog)
+        self.assertIn("[S-002]", changelog)
+
+    def test_detects_slice_without_trailer(self):
+        self.repo.write("app/greet.py", STUB)
+        self.new_slice()
+        self.to_done()
+        self.merge(message="feat: greet users")
+        self.assertIn("released v0.1.0", self.ok("release", "--apply"))
+
+    def test_bumps_only_affected_units(self):
         self.repo.write(".agents/config.toml", CONFIG + UNITS)
+        self.repo.git("add", "-A")
+        self.repo.git("commit", "-qm", "chore: declare release units")
         self.repo.git("tag", "app/v1.0.0")
         self.new_slice(change="changed", breaking="[app]")
         self.to_done()
-        out = self.ok("release", "S-001")
+        self.merge()
+        out = self.ok("release")
         self.assertIn("app/v2.0.0", out)
         self.assertNotIn("web/", out)
-        self.assertIn("feat(greeting)!:", out)
-        self.repo.git("add", "-A")
-        self.ok("release", "S-001", "--apply")
+        self.ok("release", "--apply")
         self.assertIn("**BREAKING:**", self.repo.read("app/CHANGELOG.md"))
 
-    def test_release_requires_done(self):
-        self.new_slice()
-        self.assertIn("release requires done", self.fails("release", "S-001"))
+    def test_nothing_to_release_without_slices(self):
+        self.repo.write("README.md", "# Shop\n")
+        self.merge(message="docs: add readme")
+        self.assertIn("nothing to release", self.ok("release", "--apply"))
+        self.assertEqual(self.repo.git("tag", "--list"), "")
 
 
 class AdrTest(HarnessTest):

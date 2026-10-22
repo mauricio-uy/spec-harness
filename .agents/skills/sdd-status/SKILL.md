@@ -33,4 +33,4 @@ Read-only overview of the work. Never edit files from this skill.
 | draft  | `sdd-spec`  | spec completion, open questions       |
 | ready  | `sdd-red`   | user approval of the spec             |
 | red    | `sdd-green` | user approval of the acceptance tests |
-| green  | `sdd-close` | close and release                     |
+| green  | `sdd-close` | close and pull request                |

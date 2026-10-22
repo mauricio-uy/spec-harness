@@ -28,12 +28,12 @@ Dispatcher over the slice lifecycle. Invoking it after a checkpoint counts as th
    | draft  | Activate `sdd-spec`  | Stop at its checkpoint (spec review)        |
    | ready  | Activate `sdd-red`   | Stop at its checkpoint (test review)        |
    | red    | Activate `sdd-green` | Continue with `sdd-close` on success        |
-   | green  | Activate `sdd-close` | Stop at its checkpoint (release)            |
+   | green  | Activate `sdd-close` | Stop at its checkpoint (pull request)       |
    | done   | Nothing to advance   | Propose the top candidate from `sdd-status` |
 
 3. If there is no open slice, propose promoting the top idea candidate with `sdd-spec`, or capturing a new idea with `sdd-idea`.
 
 ## Rules
 
-- Never skip a checkpoint: spec review (ready), test review (red) and release confirmation (close).
+- Never skip a checkpoint: spec review (ready), test review (red) and pull request confirmation (close).
 - If a phase fails its gate and cannot be fixed within that phase's rules, stop and report; do not jump phases.
