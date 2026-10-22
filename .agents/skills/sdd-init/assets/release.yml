@@ -1,6 +1,6 @@
 # Releases every slice merged into main: changelog entry, release commit and tags.
 # Copy to .github/workflows/release.yml. If main is protected, let GitHub Actions bypass
-# the protection so this job can push the release commit and tags.
+# the protection so this job can push the release commit and tags (see references/github.md).
 name: release
 
 on:
@@ -17,6 +17,8 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      tags: ${{ steps.release.outputs.tags }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -26,8 +28,23 @@ jobs:
         with:
           python-version: "3.x"
       - name: Release merged slices
+        id: release
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          before=$(git rev-parse HEAD)
           python .agents/bin/sdd.py release --apply
           git push --follow-tags origin HEAD:main
+          if [ "$(git rev-parse HEAD)" != "$before" ]; then
+            echo "tags=$(git tag --points-at HEAD | xargs)" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Tags pushed with GITHUB_TOKEN do not trigger other workflows, so deploy from here.
+  # Uncomment and point it at the project's deployment, e.g. a reusable workflow.
+  # deploy:
+  #   needs: release
+  #   if: needs.release.outputs.tags != ''
+  #   uses: ./.github/workflows/deploy.yml   # on: workflow_call, with a "tags" input
+  #   with:
+  #     tags: ${{ needs.release.outputs.tags }}
+  #   secrets: inherit

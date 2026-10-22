@@ -32,15 +32,15 @@ Give every agent working on the project a shared base: what the system is, the w
 5. **Configuration**: propose `.agents/config.toml` to the user:
    - `[tests]`: the project's test runner, for the slice's acceptance tests (`{files}`) and the full suite.
    - `[[units]]`: one per independently released package or service; omit for a single release unit.
-6. **Pull requests and releases**: each slice is one branch and one squash-merged pull request, released after the merge. On GitHub, propose:
-   - copying [the check workflow](assets/check.yml) to `.github/workflows/check.yml` and requiring its `sdd verify` check on `main`, so the harness rules hold even when someone skips a skill;
-   - copying [the release workflow](assets/release.yml) to `.github/workflows/release.yml`;
-   - squash merging with the pull request title and description as the commit message;
-   - if `main` is protected, letting GitHub Actions bypass the protection so the release workflow can push release commits and tags.
+6. **Pull requests and releases**: each slice is one branch and one squash-merged pull request, released after the merge. On GitHub, propose the setup in [the GitHub guide](references/github.md), in its order:
+   1. add [the check workflow](assets/check.yml) and [the release workflow](assets/release.yml) in one pull request, and merge it;
+   2. set squash merges to use the pull request title and description (`PR_TITLE`, `PR_BODY`);
+   3. once `sdd verify` has run, protect `main` with a ruleset that requires it and lets GitHub Actions bypass, so releases can push;
+   4. if the project deploys on release, do it from the `deploy` job in `release.yml`: tags pushed by the workflow trigger no other workflow.
 
-   The project's own test suite needs its own CI workflow; recommend one if it is missing, but leave it to the project's stack.
+   Ask before changing repository settings. The project's own test suite needs its own CI workflow; recommend one if it is missing, but leave it to the project's stack.
 
-   Without the workflow, releases run locally after each merge: `sdd.py release --apply`, then `git push --follow-tags`.
+   Without the release workflow, releases run locally after each merge: `sdd.py release --apply`, then `git push --follow-tags`.
 7. Run `sdd.py init`: it adds the harness block to `AGENTS.md` (between `sdd:begin`/`sdd:end` markers, leaving the rest untouched) and generates the index.
 8. Run `sdd.py lint` and fix what it reports.
 9. **Checkpoint**: show the user the overview, glossary, configuration and release setup for review.
