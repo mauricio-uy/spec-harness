@@ -1,0 +1,29 @@
+# Enforces the harness rules on every pull request: consistency, frozen acceptance
+# tests and a properly closed slice. Copy to .github/workflows/check.yml and require
+# the "sdd verify" check on main.
+name: check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: sdd verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Verify harness rules
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python .agents/bin/sdd.py verify --base "origin/$BASE_REF" --title "$PR_TITLE" --body "$PR_BODY"

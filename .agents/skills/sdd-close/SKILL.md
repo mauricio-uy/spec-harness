@@ -35,7 +35,7 @@ Record what was delivered, fold it into the living spec and hand the slice over 
 
 ## Pull request
 
-1. Run `sdd.py lint` and fix every error: broken links, unknown IDs, tests without a criterion, criteria without a test.
+1. Run `sdd.py verify --base origin/main` and fix every error. It runs `lint` (broken links, unknown IDs, tests without a criterion, criteria without a test) plus the checks the pull request will face in CI.
 2. Commit the remaining changes on the slice branch with explicit paths (code, tests, `.agents/` documents). Leave unrelated changes out.
 3. Run `sdd.py pr <ID>`. It prints the pull request title (a Conventional Commit subject built from the spec) and body: goal, acceptance criteria, notes from `close.md`, and the `Slice:` trailer last.
 4. **Checkpoint**: show the user the title, the body and the branch's changes, and wait for confirmation.

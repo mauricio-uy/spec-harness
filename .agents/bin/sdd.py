@@ -13,6 +13,9 @@ Commands (run from anywhere inside the repository):
   reopen SLICE              send a slice back to draft and unfreeze its acceptance tests
   accept ADR                accept a proposed ADR and supersede the one it replaces
   lint                      check links, ID references, AC-to-test traceability and vocabulary
+  verify [--base REF] [--title TEXT] [--body TEXT]
+                            for CI on pull requests: lint, open slices still meet their gates
+                            (frozen tests intact), and the pull request closes its slice properly
   next-id {idea,slice,adr}  print the next free ID
   pr SLICE [--title|--body] print the pull request title and body of a closed slice
   release [--apply] [--trailer TEXT]...
@@ -601,7 +604,7 @@ def glossary_aliases() -> dict[str, str]:
     return aliases
 
 
-def cmd_lint(args, config) -> int:
+def lint_findings(config: dict) -> tuple[list[str], list[str]]:
     errors, warnings = [], []
 
     def where(path: Path, number: int) -> str:
@@ -650,13 +653,53 @@ def cmd_lint(args, config) -> int:
                     warnings.append(f"{where(path, number)}: '{alias}' is a glossary alias; use '{term}'")
 
     errors += generated_problems()
+    return errors, warnings
 
+
+def print_findings(errors: list[str], warnings: list[str]) -> int:
     for error in errors:
         print(f"error: {error}")
     for warning in warnings:
         print(f"warning: {warning}")
     print(f"{len(errors)} error(s), {len(warnings)} warning(s)")
     return 1 if errors else 0
+
+
+def cmd_lint(args, config) -> int:
+    return print_findings(*lint_findings(config))
+
+
+CONVENTIONAL_RE = re.compile(r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)\s]+\))?!?: \S")
+
+
+def cmd_verify(args, config) -> int:
+    """Server-side check for pull requests: lint, open slice integrity and the pull request itself."""
+    errors, warnings = lint_findings(config)
+    for sl in open_slices():
+        # A slice keeps satisfying the gates it already passed; tests are not run here.
+        if sl.status in ("ready", "red", "green"):
+            errors += [f"{sl.id} ({sl.status}): {e}" for e in gate_ready(sl, config, run=False)]
+        if sl.status in ("red", "green"):
+            errors += [f"{sl.id} ({sl.status}): {e}" for e in gate_green(sl, config, run=False)]
+
+    if args.title is not None and not CONVENTIONAL_RE.match(args.title):
+        errors.append(f"pull request title is not a Conventional Commit subject: {args.title!r}")
+    if args.base:
+        changed = git("diff", "--name-only", f"{args.base}...HEAD").splitlines()
+        added = git("diff", "--name-only", "--diff-filter=A", f"{args.base}...HEAD").splitlines()
+        opened = sorted({m.group(1) for path in changed if (m := re.match(r"\.agents/docs/changes/(S-\d+)-", path))})
+        closed = sorted({m.group(1) for path in added if (m := re.match(r"\.agents/docs/archive/(S-\d+)-", path))})
+        for sid in opened:
+            if sid not in closed:
+                errors.append(f"{sid} is still open ({Slice(sid).status}): close it with sdd-close before merging")
+        for sid in closed:
+            sl = Slice(sid)
+            expected = commit_title(sl)
+            if args.title is not None and args.title.split(":")[0] != expected.split(":")[0]:
+                errors.append(f"pull request title should start with '{expected.split(':')[0]}:' for {sid}; `sdd.py pr {sid} --title` gives it")
+            if args.body is not None and sid not in SLICE_TRAILER_RE.findall(args.body):
+                warnings.append(f"pull request body lacks the 'Slice: {sid}' trailer; `sdd.py pr {sid} --body` gives it")
+    return print_findings(errors, warnings)
 
 
 def cmd_status(args, config) -> int:
@@ -941,6 +984,10 @@ def main() -> int:
         commands.add_parser(name).add_argument("slice")
     commands.add_parser("accept").add_argument("adr")
     commands.add_parser("lint")
+    verify = commands.add_parser("verify")
+    verify.add_argument("--base", help="base ref of the pull request, e.g. origin/main")
+    verify.add_argument("--title", help="pull request title")
+    verify.add_argument("--body", help="pull request body")
     commands.add_parser("next-id").add_argument("kind", choices=["idea", "slice", "adr"])
     pr = commands.add_parser("pr")
     pr.add_argument("slice")
@@ -957,7 +1004,7 @@ def main() -> int:
     DOCS = AGENTS / "docs"
     handlers = {
         "init": cmd_init, "index": cmd_index, "status": cmd_status, "check": cmd_check,
-        "advance": cmd_advance, "reopen": cmd_reopen, "accept": cmd_accept, "lint": cmd_lint,
+        "advance": cmd_advance, "reopen": cmd_reopen, "accept": cmd_accept, "lint": cmd_lint, "verify": cmd_verify,
         "next-id": cmd_next_id, "pr": cmd_pr, "release": cmd_release,
     }
     return handlers[args.command](args, load_config())
