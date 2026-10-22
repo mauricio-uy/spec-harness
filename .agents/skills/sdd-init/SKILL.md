@@ -35,8 +35,9 @@ Give every agent working on the project a shared base: what the system is, the w
 6. **Pull requests and releases**: each slice is one branch and one squash-merged pull request, released after the merge. On GitHub, propose the setup in [the GitHub guide](references/github.md), in its order:
    1. add [the check workflow](assets/check.yml) and [the release workflow](assets/release.yml) in one pull request, and merge it;
    2. set squash merges to use the pull request title and description (`PR_TITLE`, `PR_BODY`);
-   3. once `sdd verify` has run, protect `main` with a ruleset that requires it and lets GitHub Actions bypass, so releases can push;
-   4. if the project deploys on release, do it from the `deploy` job in `release.yml`: tags pushed by the workflow trigger no other workflow.
+   3. let the release workflow push: a deploy key on personal accounts, where GitHub rejects GitHub Actions as a bypass actor; GitHub Actions or a deploy key in organizations;
+   4. once `sdd verify` has run, protect `main` with a ruleset that requires it and lets that release actor bypass;
+   5. if the project deploys on release, use a tag-triggered workflow with the deploy key, or the `deploy` job in `release.yml` otherwise.
 
    Ask before changing repository settings. The project's own test suite needs its own CI workflow; recommend one if it is missing, but leave it to the project's stack.
 

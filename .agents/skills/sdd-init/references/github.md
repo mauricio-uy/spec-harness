@@ -30,7 +30,35 @@ The defaults are wrong for the harness:
 - `COMMIT_OR_PR_TITLE` takes the commit title when the branch has a single commit.
 - `COMMIT_MESSAGES` replaces the description with the branch's commit messages.
 
-## 3. Ruleset for main
+## 3. Let the release workflow push
+
+The release workflow pushes a release commit and tags straight to `main`, so it needs to bypass the ruleset. Which actor can bypass depends on who owns the repository:
+
+```bash
+gh api repos/OWNER/REPO -q .owner.type    # User or Organization
+```
+
+| Owner          | Release bypass actor                                     |
+|----------------|----------------------------------------------------------|
+| `User`         | A deploy key                                             |
+| `Organization` | GitHub Actions, or a deploy key to trigger tag workflows |
+
+On a personal account, GitHub rejects GitHub Actions as a bypass actor as soon as the ruleset is created ("must be part of the ruleset source or owner organization"). The whole request fails, so no ruleset and no bypass is saved.
+
+### Deploy key
+
+Create a key with write access and store its private half as the `RELEASE_DEPLOY_KEY` secret. The release workflow uses it when the secret exists:
+
+```bash
+ssh-keygen -t ed25519 -N "" -C "release workflow" -f release_key
+gh repo deploy-key add release_key.pub --repo OWNER/REPO --allow-write --title "release workflow"
+gh secret set RELEASE_DEPLOY_KEY --repo OWNER/REPO < release_key
+rm release_key release_key.pub
+```
+
+Pushes made with a deploy key trigger other workflows, unlike pushes made with the workflow's `GITHUB_TOKEN`.
+
+## 4. Ruleset for main
 
 Once `sdd verify` has run at least once, protect `main`. Add the project's test check next to `sdd verify`.
 
@@ -42,8 +70,8 @@ gh api -X POST repos/OWNER/REPO/rulesets --input - <<'EOF'
   "enforcement": "active",
   "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
   "bypass_actors": [
-    {"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"},
-    {"actor_id": 15368, "actor_type": "Integration", "bypass_mode": "always"}
+    {"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "pull_request"},
+    {"actor_type": "DeployKey", "bypass_mode": "always"}
   ],
   "rules": [
     {"type": "deletion"},
@@ -68,10 +96,12 @@ EOF
 
 The bypass actors are:
 
-- **Repository admins** (`RepositoryRole` 5), for emergencies.
-- **GitHub Actions** (`Integration` 15368), so the release workflow can push its release commit and tags straight to `main`.
+- **Repository admins** (`RepositoryRole` 5) in `pull_request` mode: they can merge a pull request whose checks fail, but cannot push to `main` directly.
+- **The deploy key**, so the release workflow can push its commit and tags.
 
-## 4. Check the first release
+In an organization without a deploy key, replace the deploy key with GitHub Actions: `{"actor_id": 15368, "actor_type": "Integration", "bypass_mode": "always"}`.
+
+## 5. Check the first release
 
 After the first slice is merged:
 
@@ -79,16 +109,9 @@ After the first slice is merged:
 - `main` gains a `chore(release): vX.Y.Z` commit;
 - the tag exists: `git ls-remote --tags origin`.
 
-If the push is rejected, the GitHub Actions bypass is not taking effect. Use a deploy key instead:
+If the push is rejected with `GH013: Repository rule violations`, the release actor is not in the ruleset's bypass list.
 
-1. Create a key pair. Add the public key as a deploy key with write access, and the private key as the `RELEASE_DEPLOY_KEY` secret.
-2. In the ruleset, add the bypass actor `{"actor_id": null, "actor_type": "DeployKey", "bypass_mode": "always"}`.
-3. In `release.yml`, pass `ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}` to `actions/checkout`.
+## 6. Deployment
 
-A GitHub App token works the same way.
-
-## 5. Deployment
-
-Tags pushed with the workflow's `GITHUB_TOKEN` do not trigger other workflows, so a separate `on: push: tags` workflow never runs. Deploy from `release.yml` instead: its `deploy` job receives the new tags. It can run the deployment itself, or call a reusable workflow (`on: workflow_call`).
-
-With a deploy key or an App token, pushed tags do trigger other workflows, so a separate tag workflow works too.
+- **With the deploy key**, the pushed tags trigger other workflows, so a separate workflow on `push: tags: ["v*"]` can deploy.
+- **With GitHub Actions as the bypass actor**, the tags are pushed with `GITHUB_TOKEN` and trigger no other workflow. Deploy from the `deploy` job in `release.yml` instead. It receives the new tags, and can run the deployment itself or call a reusable workflow (`on: workflow_call`).
