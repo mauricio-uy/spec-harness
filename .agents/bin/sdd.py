@@ -468,9 +468,18 @@ def write_index() -> None:
     (DOCS / "index.md").write_text(build_index(), encoding="utf-8")
 
 
-def index_is_current() -> bool:
+def generated_problems() -> list[str]:
+    """Problems with the generated index and AGENTS.md block, or the single hint to initialize."""
     path = DOCS / "index.md"
-    return path.exists() and path.read_text(encoding="utf-8") == build_index()
+    if not path.exists():
+        return ["the harness is not initialized in this project: run the sdd-init skill (or `sdd.py init`)"]
+    problems = []
+    if path.read_text(encoding="utf-8") != build_index():
+        problems.append(".agents/docs/index.md is stale: run `sdd.py index`")
+    agents, text = agents_md()
+    if with_agents_block(text) != text:
+        problems.append(f"{agents.name} lacks the current sdd block: run `sdd.py init`")
+    return problems
 
 
 def with_agents_block(text: str) -> str:
@@ -503,12 +512,7 @@ def cmd_index(args, config) -> int:
         write_index()
         print("generated .agents/docs/index.md")
         return 0
-    problems = []
-    if not index_is_current():
-        problems.append(".agents/docs/index.md is stale: run `sdd.py index`")
-    path, text = agents_md()
-    if with_agents_block(text) != text:
-        problems.append(f"{path.name} lacks the current sdd block: run `sdd.py init`")
+    problems = generated_problems()
     for problem in problems:
         print(f"FAIL {problem}")
     print("index and AGENTS.md are current" if not problems else f"{len(problems)} problem(s)")
@@ -641,12 +645,7 @@ def cmd_lint(args, config) -> int:
                 if re.search(rf"\b{re.escape(alias)}\b", line, re.I):
                     warnings.append(f"{where(path, number)}: '{alias}' is a glossary alias; use '{term}'")
 
-    # Generated files.
-    if not index_is_current():
-        errors.append(".agents/docs/index.md is stale: run `sdd.py index`")
-    path, text = agents_md()
-    if with_agents_block(text) != text:
-        errors.append(f"{path.name} lacks the current sdd block: run `sdd.py init`")
+    errors += generated_problems()
 
     for error in errors:
         print(f"error: {error}")
@@ -678,8 +677,8 @@ def cmd_status(args, config) -> int:
         for ref in sl.adrs():
             if ref in adrs and adrs[ref][1].get("status") == "superseded":
                 print(f"  warning: follows {ref}, superseded by {adrs[ref][1].get('superseded_by') or 'another ADR'}")
-    if not index_is_current():
-        print("warning: .agents/docs/index.md is stale: run `sdd.py index`")
+    for problem in generated_problems():
+        print(f"warning: {problem}")
     return 0
 
 

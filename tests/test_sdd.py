@@ -350,6 +350,15 @@ class AdrTest(HarnessTest):
 
 
 class IndexTest(HarnessTest):
+    def test_uninitialized_project_points_to_sdd_init(self):
+        hint = "not initialized in this project: run the sdd-init skill"
+        self.assertIn(hint, self.ok("status"))
+        for command in (("index", "--check"), ("lint",)):
+            out = self.fails(*command)
+            self.assertIn(hint, out)
+            self.assertNotIn("stale", out)
+            self.assertNotIn("AGENTS.md", out)
+
     def test_init_appends_block_once_and_keeps_content(self):
         self.repo.write("AGENTS.md", "# Mine\n\nKeep me.\n")
         self.ok("init")
