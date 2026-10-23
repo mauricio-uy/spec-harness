@@ -35,9 +35,10 @@ jobs:
           before=$(git tag --list | sort)
           python .agents/bin/sdd.py release --apply
           tags=$(comm -13 <(echo "$before") <(git tag --list | sort) | xargs)
-          for tag in $tags; do
-            git push origin "refs/tags/$tag"
-          done
+          if [ -n "$tags" ]; then
+            # All or nothing, so no release unit is left without its tag.
+            git push --atomic origin $(printf 'refs/tags/%s ' $tags)
+          fi
           echo "tags=$tags" >> "$GITHUB_OUTPUT"
       - name: Publish missing GitHub Releases
         env:
