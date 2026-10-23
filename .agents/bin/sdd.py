@@ -858,36 +858,28 @@ def release_tags() -> list[tuple[str, str, str]]:
     return tags
 
 
-def pending_slices() -> tuple[str | None, list[tuple[str, str]]]:
-    """The last released commit, and the (commit, slice ID) pairs merged after it, oldest first."""
-    released = {commit for _, commit, _ in release_tags()}
-    start, commits = None, []
-    for sha in git("log", "--first-parent", "--format=%H", check=False).splitlines():
-        if sha in released:
-            start = sha
-            break
-        commits.append(sha)
-    pending = []
-    for sha in reversed(commits):
-        ids = SLICE_TRAILER_RE.findall(git("log", "-1", "--format=%B", sha))
-        if not ids:
-            # Fallback when the trailer was edited out: the closing commit adds the archived slice.
-            added = git("diff-tree", "--root", "--no-commit-id", "--name-only", "-r", "--diff-filter=A", sha)
-            ids = sorted({m.group(1) for path in added.splitlines() if (m := re.match(r"\.agents/docs/archive/(S-\d+)-", path))})
-        pending += [(sha, sid) for sid in ids]
-    return start, pending
+def tag_unit(tag: str) -> str:
+    """Release unit of a tag: `api` for `api/v1.2.0`, the root unit (`""`) for `v1.2.0`."""
+    return tag.rpartition("/v")[0] if "/" in tag else ""
 
 
-def files_between(start: str | None, end: str) -> list[str]:
-    if start:
-        return git("diff", "--name-only", start, end).splitlines()
-    return git("ls-tree", "-r", "--name-only", end).splitlines()
+def tagged_slices(message: str) -> set[str]:
+    """Slices named in a release tag subject: `Release v1.2.0 (S-011, S-012)`."""
+    m = re.search(r"\(((?:S-\d+(?:, )?)+)\)\s*$", message.split("\n", 1)[0])
+    return set(m.group(1).split(", ")) if m else set()
 
 
-def released_slices() -> set[str]:
-    """Slices named in release tag subjects: `Release v1.2.0 (S-011, S-012)`."""
-    subjects = "\n".join(message.split("\n", 1)[0] for _, _, message in release_tags())
-    return {sid for group in re.findall(r"\(((?:S-\d+(?:, )?)+)\)\s*$", subjects, re.M) for sid in group.split(", ")}
+def commit_slices(sha: str) -> list[str]:
+    ids = SLICE_TRAILER_RE.findall(git("log", "-1", "--format=%B", sha))
+    if ids:
+        return ids
+    # Fallback when the trailer was edited out: the closing commit adds the archived slice.
+    added = git("diff-tree", "--root", "--no-commit-id", "--name-only", "-r", "--diff-filter=A", sha)
+    return sorted({m.group(1) for path in added.splitlines() if (m := re.match(r"\.agents/docs/archive/(S-\d+)-", path))})
+
+
+def commit_files(sha: str) -> list[str]:
+    return git("diff-tree", "--root", "--no-commit-id", "--name-only", "-r", "-m", "--first-parent", sha).splitlines()
 
 
 def inside(path: str, unit_path: str) -> bool:
@@ -900,30 +892,62 @@ def unit_breaking(sl: Slice, unit: str) -> bool:
     return breaking is True or (isinstance(breaking, list) and unit in breaking)
 
 
-def release_plan(merged: list[tuple[Slice, list[str]]], units: list[dict]) -> list[dict]:
-    """One release per unit touched by the merged slices, bumped by the strongest change among them."""
+def release_plan(units: list[dict]) -> list[dict]:
+    """Per release unit: the slices merged since its own last tag whose commit touched its files.
+
+    A squash merge makes each slice one commit, so its own diff (sha^..sha) is exactly what it changed.
+    Each unit is tagged on its last slice's commit, bumped by the strongest change among its slices.
+    """
     names = {u.get("name", "") for u in units}
-    for sl, _ in merged:
-        if sl.status != "done" or sl.front.get("change") not in CHANGES:
-            fail(f"{sl.id} is merged but not closed (status {sl.status}, change {sl.front.get('change')})")
-        breaking = sl.front.get("breaking")
-        unknown = set(breaking) - names if isinstance(breaking, list) else set()
-        if unknown:
-            fail(f"{sl.id} lists unknown release units as breaking: {', '.join(sorted(unknown))}")
+    history = git("log", "--first-parent", "--format=%H", check=False).splitlines()
+    tags = release_tags()
+    commits: dict[str, tuple[list[str], list[str]]] = {}
+    slices: dict[str, Slice] = {}
+
+    def closed(sid: str) -> Slice:
+        if sid not in slices:
+            sl = slices[sid] = Slice(sid)
+            if sl.status != "done" or sl.front.get("change") not in CHANGES:
+                fail(f"{sid} is merged but not closed (status {sl.status}, change {sl.front.get('change')})")
+            breaking = sl.front.get("breaking")
+            unknown = set(breaking) - names if isinstance(breaking, list) else set()
+            if unknown:
+                fail(f"{sid} lists unknown release units as breaking: {', '.join(sorted(unknown))}")
+        return slices[sid]
+
     plan = []
     for unit in units:
         name, paths = unit.get("name", ""), unit.get("paths", ["."])
-        slices = [sl for sl, files in merged if not name or any(inside(f, p) for f in files for p in paths)]
-        if not slices:
+        own = [(commit, message) for tag, commit, message in tags if tag_unit(tag) == name]
+        tagged = {commit for commit, _ in own}
+        released = set().union(*(tagged_slices(message) for _, message in own))
+        pending = []
+        for sha in history:
+            if sha in tagged:
+                break
+            pending.append(sha)
+        chosen, target = [], None
+        for sha in reversed(pending):
+            if sha not in commits:
+                commits[sha] = (commit_slices(sha), commit_files(sha))
+            ids, files = commits[sha]
+            if not ids or (name and not any(inside(f, p) for f in files for p in paths)):
+                continue
+            for sid in ids:
+                if sid not in released:
+                    chosen.append(closed(sid))
+                    target = sha
+        if not chosen:
             continue
-        levels = ["major" if unit_breaking(sl, name) else CHANGES[sl.front["change"]][2] for sl in slices]
+        levels = ["major" if unit_breaking(sl, name) else CHANGES[sl.front["change"]][2] for sl in chosen]
         level = max(levels, key=["patch", "minor", "major"].index)
         version = ".".join(map(str, bump(latest_version(name), level)))
         plan.append({
             "name": name,
-            "slices": slices,
+            "slices": chosen,
             "version": version,
             "tag": f"{name}/v{version}" if name else f"v{version}",
+            "target": target,
         })
     return plan
 
@@ -939,32 +963,23 @@ def release_notes(slices: list[Slice], unit: str) -> str:
 
 
 def cmd_release(args, config) -> int:
-    units = config.get("units") or [{"name": "", "paths": ["."]}]
-    released = released_slices()
-    previous, pending = pending_slices()
-    merged, target = [], None
-    for sha, sid in pending:
-        files, previous = files_between(previous, sha), sha
-        if sid not in released:
-            merged.append((Slice(sid), files))
-            target = sha
-    plan = release_plan(merged, units)
+    plan = release_plan(config.get("units") or [{"name": "", "paths": ["."]}])
     if not plan:
         print("nothing to release")
         return 0
 
     for p in plan:
-        print(f"{p['tag']:<20} {', '.join(sl.id for sl in p['slices'])}")
+        target = git("rev-parse", "--short", p["target"]).strip()
+        print(f"{p['tag']:<20} {target}  {', '.join(sl.id for sl in p['slices'])}")
     if not args.apply:
-        print(f"\ndry run: pass --apply to tag {git('rev-parse', '--short', target).strip()}, the last released slice's commit")
+        print("\ndry run: pass --apply to create these annotated tags")
         return 0
 
     for p in plan:
         message = f"Release {p['tag']} ({', '.join(sl.id for sl in p['slices'])})\n\n{release_notes(p['slices'], p['name'])}"
-        # The last slice's commit, not HEAD: later unreleased commits stay out of this version.
         # Verbatim, or git strips the notes' `###` headings as comments.
-        subprocess.run(["git", "tag", "-a", p["tag"], target, "--cleanup=verbatim", "-F", "-"], cwd=ROOT, input=message, text=True, check=True)
-    print(f"released {', '.join(p['tag'] for p in plan)} on {git('rev-parse', '--short', target).strip()}")
+        subprocess.run(["git", "tag", "-a", p["tag"], p["target"], "--cleanup=verbatim", "-F", "-"], cwd=ROOT, input=message, text=True, check=True)
+    print(f"released {', '.join(p['tag'] for p in plan)}")
     return 0
 
 

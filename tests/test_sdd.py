@@ -389,6 +389,39 @@ class ReleaseTest(HarnessTest):
         self.assertEqual(self.tags(), [])
 
 
+class MonorepoReleaseTest(HarnessTest):
+    def setUp(self):
+        super().setUp()
+        self.repo.write(".agents/config.toml", CONFIG + UNITS)
+        self.repo.write("web/index.html", "<h1>Shop</h1>\n")
+        self.repo.git("add", "-A")
+        self.repo.git("commit", "-qm", "chore: add web and declare release units")
+
+    def test_first_release_tags_only_units_the_slice_touched(self):
+        self.ship("S-001")
+        self.ok("release", "--apply")
+        self.assertEqual(self.tags(), ["app/v0.1.0"])
+
+    def test_commit_without_slice_does_not_bump_other_units(self):
+        self.ship("S-001")
+        self.ok("release", "--apply")
+        self.repo.write("web/index.html", "<h1>Shop!</h1>\n")
+        self.merge(message="chore: tweak web copy")
+        self.repo.write("app/farewell.py", "def farewell(name):\n    return f'Bye, {name}!'\n")
+        self.ship("S-002")
+        self.ok("release", "--apply")
+        self.assertEqual(self.tags(), ["app/v0.1.0", "app/v0.2.0"])
+
+    def test_recovers_the_tag_of_a_single_unit(self):
+        self.repo.write("web/index.html", "<h1>Greeter</h1>\n")
+        self.ship("S-001")
+        self.ok("release", "--apply")
+        self.assertEqual(self.tags(), ["app/v0.1.0", "web/v0.1.0"])
+        self.repo.git("tag", "-d", "web/v0.1.0")
+        self.assertIn("released web/v0.1.0", self.ok("release", "--apply"))
+        self.assertEqual(self.tags(), ["app/v0.1.0", "web/v0.1.0"])
+
+
 class ChangelogTest(HarnessTest):
     def test_renders_releases_newest_first(self):
         self.ship("S-001")
