@@ -73,16 +73,40 @@ EOF
 
 Repository admins (`RepositoryRole` 5) bypass in `pull_request` mode: they can merge a pull request whose checks fail, but cannot push to `main` directly.
 
-If you add a ruleset that protects tags, it must still let GitHub Actions create `v*` and `<unit>/v*` tags.
+## 4. Ruleset for release tags
 
-## 4. Check the first release
+Release tags are the source of truth for versions, release notes and what has been released. A deleted or moved tag makes the next release compute the wrong version, so protect them. The ruleset blocks deleting and moving tags but not creating them, so the release workflow needs no bypass:
+
+```bash
+gh api -X POST repos/OWNER/REPO/rulesets --input - <<'EOF'
+{
+  "name": "release tags",
+  "target": "tag",
+  "enforcement": "active",
+  "conditions": {"ref_name": {"include": ["refs/tags/v*", "refs/tags/*/v*"], "exclude": []}},
+  "bypass_actors": [
+    {"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}
+  ],
+  "rules": [
+    {"type": "deletion"},
+    {"type": "update"}
+  ]
+}
+EOF
+```
+
+Repository admins can still fix a mistaken tag.
+
+## 5. Check the first release
 
 After the first slice is merged:
 
 - the `release` run succeeds;
-- the tag exists (`git ls-remote --tags origin`), and so does its GitHub Release;
+- the tag exists (`git ls-remote --tags origin`) on the slice's merge commit, and so does its GitHub Release;
 - `main` has no new commit.
 
-## 5. Deployment
+If a GitHub Release is missing because publishing failed, re-run the workflow: it publishes the release of any recent tag that lacks one.
+
+## 6. Deployment
 
 Tags and releases created with the workflow's `GITHUB_TOKEN` trigger no other workflow, so a separate `on: push: tags` workflow never runs. Deploy from the `deploy` job in `release.yml`: it receives the new tags, and can run the deployment itself or call a reusable workflow (`on: workflow_call`).
