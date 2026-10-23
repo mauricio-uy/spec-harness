@@ -1,6 +1,6 @@
 # Releases every slice merged into main: one annotated tag per affected release unit,
-# carrying the release notes, and a GitHub Release from each tag. Nothing is pushed to
-# main, so no ruleset bypass or secret is needed. Copy to .github/workflows/release.yml.
+# carrying the release notes, and a GitHub Release from each tag. It only pushes tags,
+# so the workflow's GITHUB_TOKEN is enough. Copy to .github/workflows/release.yml.
 name: release
 
 on:

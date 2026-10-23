@@ -6,7 +6,7 @@ Replace `OWNER/REPO` with the repository. The commands use the GitHub CLI (`gh`)
 
 ## How releases work
 
-The release workflow never writes to `main`. After each merge it creates one annotated tag per affected release unit on the merged commit. Each tag message carries the release notes, and the workflow publishes a GitHub Release from it. The workflow's own `GITHUB_TOKEN` is enough, on personal accounts and organizations alike: no ruleset bypass, deploy key or secret.
+The release workflow never writes to `main`. After each merge it creates one annotated tag per affected release unit on the merged commit. Each tag message carries the release notes, and the workflow publishes a GitHub Release from it. The workflow's own `GITHUB_TOKEN` is enough, on personal accounts and organizations alike.
 
 `CHANGELOG.md` is not committed. When a package needs one, generate it from the tags at build time with `sdd.py changelog`.
 
@@ -86,13 +86,3 @@ After the first slice is merged:
 ## 5. Deployment
 
 Tags and releases created with the workflow's `GITHUB_TOKEN` trigger no other workflow, so a separate `on: push: tags` workflow never runs. Deploy from the `deploy` job in `release.yml`: it receives the new tags, and can run the deployment itself or call a reusable workflow (`on: workflow_call`).
-
-## Migrating from a committed changelog
-
-Earlier versions of the harness pushed a release commit to `main`. If the repository was set up for that, remove what it needed:
-
-- the release deploy key: `gh repo deploy-key list` and `gh repo deploy-key delete <id>`;
-- the `RELEASE_DEPLOY_KEY` secret: `gh secret delete RELEASE_DEPLOY_KEY`;
-- the deploy key or GitHub Actions bypass actor from the `main` ruleset.
-
-`sdd.py release` finds the last release from its tags, so older `chore(release)` commits need no cleanup.
