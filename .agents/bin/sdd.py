@@ -892,11 +892,12 @@ def unit_breaking(sl: Slice, unit: str) -> bool:
     return breaking is True or (isinstance(breaking, list) and unit in breaking)
 
 
-def release_plan(units: list[dict]) -> list[dict]:
+def release_plan(units: list[dict]) -> tuple[list[dict], list[str]]:
     """Per release unit: the slices merged since its own last tag whose commit touched its files.
 
     A squash merge makes each slice one commit, so its own diff (sha^..sha) is exactly what it changed.
     Each unit is tagged on its last slice's commit, bumped by the strongest change among its slices.
+    Also returns the pending slices whose commit touched no unit at all, which are never released.
     """
     names = {u.get("name", "") for u in units}
     history = git("log", "--first-parent", "--format=%H", check=False).splitlines()
@@ -915,9 +916,12 @@ def release_plan(units: list[dict]) -> list[dict]:
                 fail(f"{sid} lists unknown release units as breaking: {', '.join(sorted(unknown))}")
         return slices[sid]
 
-    plan = []
+    def touches(files: list[str], unit: dict) -> bool:
+        return not unit.get("name") or any(inside(f, p) for f in files for p in unit.get("paths", ["."]))
+
+    plan, untouched = [], set()
     for unit in units:
-        name, paths = unit.get("name", ""), unit.get("paths", ["."])
+        name = unit.get("name", "")
         own = [(commit, message) for tag, commit, message in tags if tag_unit(tag) == name]
         tagged = {commit for commit, _ in own}
         released = set().union(*(tagged_slices(message) for _, message in own))
@@ -931,7 +935,9 @@ def release_plan(units: list[dict]) -> list[dict]:
             if sha not in commits:
                 commits[sha] = (commit_slices(sha), commit_files(sha))
             ids, files = commits[sha]
-            if not ids or (name and not any(inside(f, p) for f in files for p in paths)):
+            if ids and not any(touches(files, u) for u in units):
+                untouched.update(sid for sid in ids if sid not in released)
+            if not ids or not touches(files, unit):
                 continue
             for sid in ids:
                 if sid not in released:
@@ -949,7 +955,7 @@ def release_plan(units: list[dict]) -> list[dict]:
             "tag": f"{name}/v{version}" if name else f"v{version}",
             "target": target,
         })
-    return plan
+    return plan, sorted(untouched)
 
 
 def release_notes(slices: list[Slice], unit: str) -> str:
@@ -963,7 +969,9 @@ def release_notes(slices: list[Slice], unit: str) -> str:
 
 
 def cmd_release(args, config) -> int:
-    plan = release_plan(config.get("units") or [{"name": "", "paths": ["."]}])
+    plan, untouched = release_plan(config.get("units") or [{"name": "", "paths": ["."]}])
+    for sid in untouched:
+        print(f"{sid} touches no release unit: not released")
     if not plan:
         print("nothing to release")
         return 0

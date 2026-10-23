@@ -8,6 +8,10 @@ Replace `OWNER/REPO` with the repository. The commands use the GitHub CLI (`gh`)
 
 The release workflow never writes to `main`. After each merge it creates one annotated tag per affected release unit on the merged commit. Each tag message carries the release notes, and the workflow publishes a GitHub Release from it. The workflow's own `GITHUB_TOKEN` is enough, on personal accounts and organizations alike.
 
+Versions follow Semantic Versioning from the merged slices: `fixed` and `security` bump the patch, other changes the minor, and `breaking` the major. While a unit is below `1.0.0`, breaking changes bump the minor instead (see [Declaring 1.0.0](#declaring-100)).
+
+Release notes are per slice. Commits without a slice ship in their unit's next version but are not named in its notes.
+
 `CHANGELOG.md` is not committed. When a package needs one, generate it from the tags at build time with `sdd.py changelog`.
 
 ## 1. Add the workflows
@@ -110,3 +114,14 @@ If a GitHub Release is missing because publishing failed, re-run the workflow: i
 ## 6. Deployment
 
 Tags and releases created with the workflow's `GITHUB_TOKEN` trigger no other workflow, so a separate `on: push: tags` workflow never runs. Deploy from the `deploy` job in `release.yml`: it receives the new tags, and can run the deployment itself or call a reusable workflow (`on: workflow_call`).
+
+## Declaring 1.0.0
+
+A unit stays below `1.0.0` until someone declares its API stable: under Semantic Versioning, breaking changes in `0.x` bump the minor, so releases never reach `1.0.0` on their own. Declare it once per unit with an annotated tag on `main`:
+
+```bash
+git tag -a v1.0.0 -m "Release v1.0.0" origin/main && git push origin v1.0.0        # single unit
+git tag -a api/v1.0.0 -m "Release api/v1.0.0" origin/main && git push origin api/v1.0.0
+```
+
+`sdd.py release` continues from it: the next `added` slice releases `1.1.0`, and from then on every breaking slice bumps the major (`2.0.0`, `3.0.0`) automatically.

@@ -49,6 +49,7 @@ Releases happen after the merge, on `main`, never on the slice branch:
 - Merge with **squash**, using the pull request title and body as the commit message, so the slice reaches `main` as one commit carrying the `Slice:` trailer. A release attributes to a slice exactly what its commit changed, so a direct commit to `main` works only if it holds the whole slice.
 - The release workflow (proposed by `sdd-init`) runs `sdd.py release --apply` on every push to `main`. Without it, run it locally after `git pull`, then `git push --follow-tags origin main`, which pushes only the new release tags.
 - Each release unit is released on its own: the slices merged since its last tag whose commit touched its files bump its version, and an annotated tag goes on the last of those commits. The tag message carries the release notes; the workflow publishes them as a GitHub Release. Nothing is committed to `main`.
+- Commits without a slice ship in their unit's next version but are not named in its notes, and a slice whose commit touches no release unit is never released; `release` says so.
 - `CHANGELOG.md` is generated from the tags when needed: `sdd.py changelog`.
 
 Release units are declared in `.agents/config.toml`. Without units, the whole repository is one unit tagged `vX.Y.Z`.
