@@ -361,6 +361,19 @@ class ReleaseTest(HarnessTest):
         self.assertEqual(self.tags(), ["v0.1.0"])
         self.assertTrue(self.tag_message("v0.1.0").startswith("Release v0.1.0 (S-001, S-002)\n"))
 
+    def test_continues_from_a_declared_1_0_0(self):
+        self.ship("S-001")
+        self.ok("release", "--apply")
+        self.repo.git("tag", "-a", "v1.0.0", "-m", "Release v1.0.0")
+        self.ship("S-002")
+        self.ok("release", "--apply")
+        self.repo.write("app/greet.py", STUB)
+        self.new_slice("S-003", breaking="true")
+        self.to_done("S-003")
+        self.merge("S-003")
+        self.ok("release", "--apply")
+        self.assertEqual(self.tags(), ["v0.1.0", "v1.0.0", "v1.1.0", "v2.0.0"])
+
     def test_detects_slice_without_trailer(self):
         self.repo.write("app/greet.py", STUB)
         self.new_slice()
@@ -411,6 +424,14 @@ class MonorepoReleaseTest(HarnessTest):
         self.ship("S-002")
         self.ok("release", "--apply")
         self.assertEqual(self.tags(), ["app/v0.1.0", "app/v0.2.0"])
+
+    def test_reports_slices_that_touch_no_unit(self):
+        self.ship("S-001")
+        self.ok("release", "--apply")
+        self.ship("S-002")  # ends with the same app/greet.py: only tests and docs change
+        out = self.ok("release")
+        self.assertIn("S-002 touches no release unit: not released", out)
+        self.assertIn("nothing to release", out)
 
     def test_recovers_the_tag_of_a_single_unit(self):
         self.repo.write("web/index.html", "<h1>Greeter</h1>\n")
