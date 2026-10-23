@@ -1,6 +1,6 @@
-# Releases every slice merged into main: changelog entry, release commit and tags.
-# Copy to .github/workflows/release.yml. If main is protected, let GitHub Actions bypass
-# the protection so this job can push the release commit and tags (see references/github.md).
+# Releases every slice merged into main: one annotated tag per affected release unit,
+# carrying the release notes, and a GitHub Release from each tag. Nothing is pushed to
+# main, so no ruleset bypass or secret is needed. Copy to .github/workflows/release.yml.
 name: release
 
 on:
@@ -29,18 +29,22 @@ jobs:
           python-version: "3.x"
       - name: Release merged slices
         id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          before=$(git rev-parse HEAD)
+          before=$(git tag --points-at HEAD | sort)
           python .agents/bin/sdd.py release --apply
-          git push --follow-tags origin HEAD:main
-          if [ "$(git rev-parse HEAD)" != "$before" ]; then
-            echo "tags=$(git tag --points-at HEAD | xargs)" >> "$GITHUB_OUTPUT"
-          fi
+          tags=$(comm -13 <(echo "$before") <(git tag --points-at HEAD | sort) | xargs)
+          for tag in $tags; do
+            git push origin "refs/tags/$tag"
+            gh release create "$tag" --verify-tag --notes-from-tag --title "$tag"
+          done
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
 
-  # Tags pushed with GITHUB_TOKEN do not trigger other workflows, so deploy from here.
-  # Uncomment and point it at the project's deployment, e.g. a reusable workflow.
+  # Tags and releases created with GITHUB_TOKEN do not trigger other workflows, so deploy
+  # from here. Uncomment and point it at the project's deployment, e.g. a reusable workflow.
   # deploy:
   #   needs: release
   #   if: needs.release.outputs.tags != ''

@@ -18,9 +18,10 @@ Commands (run from anywhere inside the repository):
                             (frozen tests intact), and the pull request closes its slice properly
   next-id {idea,slice,adr}  print the next free ID
   pr SLICE [--title|--body] print the pull request title and body of a closed slice
-  release [--apply] [--trailer TEXT]...
-                            after merging, plan (or apply) a changelog entry, release commit
-                            and tags for every slice merged since the last release
+  release [--apply]         after merging, tag every release unit touched by the slices merged
+                            since the last release; the tag message carries the release notes
+  changelog [--unit NAME] [--output FILE]
+                            render CHANGELOG.md from the release tags
 
 Optional configuration in .agents/config.toml:
   [tests]
@@ -73,7 +74,7 @@ SKIP_DIRS = {".git", ".agents", "node_modules", ".venv", "venv", "__pycache__", 
 FRONT_RE = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
 AC_RE = re.compile(r"^\s*-\s*(~~)?\s*\*\*AC-(\d+):\*\*\s*(.*)$", re.M)
-RELEASE_PREFIX = "chore(release):"
+RELEASE_TAG_RE = re.compile(r"(?:[\w.-]+/)?v\d+\.\d+\.\d+")
 SLICE_TRAILER_RE = re.compile(r"^Slice:[ \t]*(S-\d+)[ \t]*$", re.M)
 CHANGELOG_HEADER = """# Changelog
 
@@ -846,12 +847,23 @@ def cmd_pr(args, config) -> int:
     return 0
 
 
+def release_tags() -> list[tuple[str, str, str]]:
+    """(name, commit, message) of every annotated release tag (`v1.2.0`, `api/v1.2.0`)."""
+    out = git("for-each-ref", "refs/tags", "--format=%(refname:short)%00%(objecttype)%00%(*objectname)%00%(contents)%01", check=False)
+    tags = []
+    for record in out.split("\x01"):
+        fields = record.lstrip("\n").split("\0")
+        if len(fields) == 4 and fields[1] == "tag" and RELEASE_TAG_RE.fullmatch(fields[0]):
+            tags.append((fields[0], fields[2], fields[3]))
+    return tags
+
+
 def pending_slices() -> tuple[str | None, list[tuple[str, str]]]:
-    """The last release commit, and the (commit, slice ID) pairs merged after it, oldest first."""
+    """The last released commit, and the (commit, slice ID) pairs merged after it, oldest first."""
+    released = {commit for _, commit, _ in release_tags()}
     start, commits = None, []
-    for line in git("log", "--first-parent", "--format=%H%x00%s", check=False).splitlines():
-        sha, _, subject = line.partition("\0")
-        if subject.startswith(RELEASE_PREFIX):
+    for sha in git("log", "--first-parent", "--format=%H", check=False).splitlines():
+        if sha in released:
             start = sha
             break
         commits.append(sha)
@@ -873,29 +885,14 @@ def files_between(start: str | None, end: str) -> list[str]:
 
 
 def released_slices() -> set[str]:
-    """Slices named in release tag messages: `Release v1.2.0 (S-011, S-012)`."""
-    subjects = git("for-each-ref", "refs/tags", "--format=%(contents:subject)", check=False)
+    """Slices named in release tag subjects: `Release v1.2.0 (S-011, S-012)`."""
+    subjects = "\n".join(message.split("\n", 1)[0] for _, _, message in release_tags())
     return {sid for group in re.findall(r"\(((?:S-\d+(?:, )?)+)\)\s*$", subjects, re.M) for sid in group.split(", ")}
 
 
 def inside(path: str, unit_path: str) -> bool:
     unit_path = unit_path.strip("/")
     return unit_path in ("", ".") or path == unit_path or path.startswith(unit_path + "/")
-
-
-def write_changelog(path: Path, version: str, entries: dict[str, list[str]]) -> None:
-    text = path.read_text(encoding="utf-8") if path.exists() else CHANGELOG_HEADER
-    categories = [category for _, category, _ in CHANGES.values() if category in entries]
-    section = f"## [{version}] - {date.today().isoformat()}\n\n" + "\n".join(
-        f"### {category}\n\n" + "\n".join(entries[category]) + "\n" for category in categories
-    )
-    match = re.search(r"^## \[(?!Unreleased\])", text, re.M)
-    if match:
-        text = text[:match.start()] + section + "\n" + text[match.start():]
-    else:
-        text = text.rstrip("\n") + "\n\n" + section
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
 
 
 def unit_breaking(sl: Slice, unit: str) -> bool:
@@ -927,9 +924,18 @@ def release_plan(merged: list[tuple[Slice, list[str]]], units: list[dict]) -> li
             "slices": slices,
             "version": version,
             "tag": f"{name}/v{version}" if name else f"v{version}",
-            "changelog": ROOT / paths[0] / "CHANGELOG.md",
         })
     return plan
+
+
+def release_notes(slices: list[Slice], unit: str) -> str:
+    """Keep a Changelog sections for one release, carried in the tag message and the GitHub Release."""
+    entries: dict[str, list[str]] = {}
+    for sl in slices:
+        prefix = "**BREAKING:** " if unit_breaking(sl, unit) else ""
+        entries.setdefault(CHANGES[sl.front["change"]][1], []).append(f"- {prefix}{sl.goal()} ({sl.id})")
+    categories = [category for _, category, _ in CHANGES.values() if category in entries]
+    return "\n".join(f"### {category}\n\n" + "\n".join(entries[category]) + "\n" for category in categories)
 
 
 def cmd_release(args, config) -> int:
@@ -947,29 +953,39 @@ def cmd_release(args, config) -> int:
         return 0
 
     for p in plan:
-        print(f"{p['tag']:<20} {p['changelog'].relative_to(ROOT).as_posix():<28} {', '.join(sl.id for sl in p['slices'])}")
+        print(f"{p['tag']:<20} {', '.join(sl.id for sl in p['slices'])}")
     if not args.apply:
-        print("\ndry run: pass --apply to write the changelogs, commit the release and tag it")
+        print("\ndry run: pass --apply to create the annotated tags on HEAD")
         return 0
 
     for p in plan:
-        entries: dict[str, list[str]] = {}
-        for sl in p["slices"]:
-            link = Path(os.path.relpath(sl.spec, p["changelog"].parent)).as_posix()
-            prefix = "**BREAKING:** " if unit_breaking(sl, p["name"]) else ""
-            entries.setdefault(CHANGES[sl.front["change"]][1], []).append(f"- {prefix}{sl.goal()} ([{sl.id}]({link}))")
-        write_changelog(p["changelog"], p["version"], entries)
-    ids = sorted({sl.id for p in plan for sl in p["slices"]})
-    tags = [p["tag"] for p in plan]
-    changelogs = [p["changelog"].relative_to(ROOT).as_posix() for p in plan]
-    message = f"{RELEASE_PREFIX} {', '.join(tags)}\n\nReleases {', '.join(ids)}.\n"
-    if args.trailer:
-        message += "\n" + "\n".join(args.trailer) + "\n"
-    git("add", "--", *changelogs)
-    subprocess.run(["git", "commit", "-q", "-F", "-", "--", *changelogs], cwd=ROOT, input=message, text=True, check=True)
-    for p in plan:
-        git("tag", "-a", p["tag"], "-m", f"Release {p['tag']} ({', '.join(sl.id for sl in p['slices'])})")
-    print(f"released {', '.join(tags)} in {git('rev-parse', '--short', 'HEAD').strip()}")
+        message = f"Release {p['tag']} ({', '.join(sl.id for sl in p['slices'])})\n\n{release_notes(p['slices'], p['name'])}"
+        # Verbatim, or git strips the notes' `###` headings as comments.
+        subprocess.run(["git", "tag", "-a", p["tag"], "--cleanup=verbatim", "-F", "-"], cwd=ROOT, input=message, text=True, check=True)
+    print(f"released {', '.join(p['tag'] for p in plan)} on {git('rev-parse', '--short', 'HEAD').strip()}")
+    return 0
+
+
+def cmd_changelog(args, config) -> int:
+    units = [u.get("name", "") for u in config.get("units") or []]
+    if units and args.unit is None:
+        fail(f"this project has release units; pass --unit with one of: {', '.join(units)}")
+    if args.unit is not None and args.unit not in units:
+        fail(f"unknown release unit: {args.unit}")
+    prefix = f"{args.unit}/v" if args.unit else "v"
+    releases = []
+    for name, _, message in release_tags():
+        if m := re.fullmatch(re.escape(prefix) + r"(\d+)\.(\d+)\.(\d+)", name):
+            date_ = git("for-each-ref", f"refs/tags/{name}", "--format=%(taggerdate:short)").strip()
+            releases.append((tuple(map(int, m.groups())), date_, message.split("\n", 1)[1].strip() if "\n" in message else ""))
+    text = CHANGELOG_HEADER + "".join(
+        f"\n## [{'.'.join(map(str, version))}] - {date_}\n\n{notes}\n" for version, date_, notes in sorted(releases, reverse=True)
+    )
+    if args.output:
+        Path(args.output).write_text(text, encoding="utf-8")
+        print(f"wrote {args.output}")
+    else:
+        print(text, end="")
     return 0
 
 
@@ -994,9 +1010,10 @@ def main() -> int:
     only = pr.add_mutually_exclusive_group()
     only.add_argument("--title", action="store_true")
     only.add_argument("--body", action="store_true")
-    release = commands.add_parser("release")
-    release.add_argument("--apply", action="store_true")
-    release.add_argument("--trailer", action="append", default=[])
+    commands.add_parser("release").add_argument("--apply", action="store_true")
+    changelog = commands.add_parser("changelog")
+    changelog.add_argument("--unit")
+    changelog.add_argument("--output")
     args = parser.parse_args()
 
     ROOT = find_root()
@@ -1005,7 +1022,7 @@ def main() -> int:
     handlers = {
         "init": cmd_init, "index": cmd_index, "status": cmd_status, "check": cmd_check,
         "advance": cmd_advance, "reopen": cmd_reopen, "accept": cmd_accept, "lint": cmd_lint, "verify": cmd_verify,
-        "next-id": cmd_next_id, "pr": cmd_pr, "release": cmd_release,
+        "next-id": cmd_next_id, "pr": cmd_pr, "release": cmd_release, "changelog": cmd_changelog,
     }
     return handlers[args.command](args, load_config())
 

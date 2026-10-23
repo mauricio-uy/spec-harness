@@ -1,15 +1,21 @@
 # GitHub setup
 
-How to configure a GitHub repository for the harness. Apply the steps in this order: a check can only be required after it has run, and the release workflow can only push once `main` lets it.
+How to configure a GitHub repository for the harness. Apply the steps in this order: a check can only be required after it has run.
 
 Replace `OWNER/REPO` with the repository. The commands use the GitHub CLI (`gh`).
+
+## How releases work
+
+The release workflow never writes to `main`. After each merge it creates one annotated tag per affected release unit on the merged commit. Each tag message carries the release notes, and the workflow publishes a GitHub Release from it. The workflow's own `GITHUB_TOKEN` is enough, on personal accounts and organizations alike: no ruleset bypass, deploy key or secret.
+
+`CHANGELOG.md` is not committed. When a package needs one, generate it from the tags at build time with `sdd.py changelog`.
 
 ## 1. Add the workflows
 
 Open one pull request that adds:
 
 - `.github/workflows/check.yml`, from [the check workflow](../assets/check.yml): runs `sdd.py verify` on every pull request;
-- `.github/workflows/release.yml`, from [the release workflow](../assets/release.yml): releases merged slices on every push to `main`;
+- `.github/workflows/release.yml`, from [the release workflow](../assets/release.yml): tags and publishes merged slices on every push to `main`;
 - the project's own test workflow, if it has none.
 
 Merge it before requiring any check: until `check.yml` exists on `main` and has run once, requiring `sdd verify` blocks every pull request.
@@ -42,8 +48,7 @@ gh api -X POST repos/OWNER/REPO/rulesets --input - <<'EOF'
   "enforcement": "active",
   "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
   "bypass_actors": [
-    {"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"},
-    {"actor_id": 15368, "actor_type": "Integration", "bypass_mode": "always"}
+    {"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "pull_request"}
   ],
   "rules": [
     {"type": "deletion"},
@@ -66,29 +71,28 @@ gh api -X POST repos/OWNER/REPO/rulesets --input - <<'EOF'
 EOF
 ```
 
-The bypass actors are:
+Repository admins (`RepositoryRole` 5) bypass in `pull_request` mode: they can merge a pull request whose checks fail, but cannot push to `main` directly.
 
-- **Repository admins** (`RepositoryRole` 5), for emergencies.
-- **GitHub Actions** (`Integration` 15368), so the release workflow can push its release commit and tags straight to `main`.
+If you add a ruleset that protects tags, it must still let GitHub Actions create `v*` and `<unit>/v*` tags.
 
 ## 4. Check the first release
 
 After the first slice is merged:
 
 - the `release` run succeeds;
-- `main` gains a `chore(release): vX.Y.Z` commit;
-- the tag exists: `git ls-remote --tags origin`.
-
-If the push is rejected, the GitHub Actions bypass is not taking effect. Use a deploy key instead:
-
-1. Create a key pair. Add the public key as a deploy key with write access, and the private key as the `RELEASE_DEPLOY_KEY` secret.
-2. In the ruleset, add the bypass actor `{"actor_id": null, "actor_type": "DeployKey", "bypass_mode": "always"}`.
-3. In `release.yml`, pass `ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}` to `actions/checkout`.
-
-A GitHub App token works the same way.
+- the tag exists (`git ls-remote --tags origin`), and so does its GitHub Release;
+- `main` has no new commit.
 
 ## 5. Deployment
 
-Tags pushed with the workflow's `GITHUB_TOKEN` do not trigger other workflows, so a separate `on: push: tags` workflow never runs. Deploy from `release.yml` instead: its `deploy` job receives the new tags. It can run the deployment itself, or call a reusable workflow (`on: workflow_call`).
+Tags and releases created with the workflow's `GITHUB_TOKEN` trigger no other workflow, so a separate `on: push: tags` workflow never runs. Deploy from the `deploy` job in `release.yml`: it receives the new tags, and can run the deployment itself or call a reusable workflow (`on: workflow_call`).
 
-With a deploy key or an App token, pushed tags do trigger other workflows, so a separate tag workflow works too.
+## Migrating from a committed changelog
+
+Earlier versions of the harness pushed a release commit to `main`. If the repository was set up for that, remove what it needed:
+
+- the release deploy key: `gh repo deploy-key list` and `gh repo deploy-key delete <id>`;
+- the `RELEASE_DEPLOY_KEY` secret: `gh secret delete RELEASE_DEPLOY_KEY`;
+- the deploy key or GitHub Actions bypass actor from the `main` ruleset.
+
+`sdd.py release` finds the last release from its tags, so older `chore(release)` commits need no cleanup.
