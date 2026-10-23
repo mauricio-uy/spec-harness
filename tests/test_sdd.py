@@ -116,6 +116,8 @@ class Repo:
                            ("commit.gpgsign", "false"), ("tag.gpgsign", "false")):
             self.git("config", key, value)
         self.write(".agents/config.toml", CONFIG)
+        # Bytecode from running the tests would otherwise be committed and count as app changes.
+        self.write(".gitignore", "__pycache__/\n")
         self.write("app/__init__.py", "")
         self.write("app/greet.py", STUB)
         self.write("tests/__init__.py", "")
