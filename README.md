@@ -9,7 +9,7 @@ A minimalist harness for AI coding agents that combines spec-driven development 
 - **Gates, not approvals.** A stdlib-only Python CLI verifies every transition. People step in at three checkpoints only: the spec, the acceptance tests and the pull request.
 - **Living spec.** Closed slices merge into a spec of how the system behaves today, traceable to its tests.
 - **One slice, one pull request.** Each slice lives on its own branch and is squash-merged as one Conventional Commit carrying a `Slice:` trailer.
-- **Continuous deployment.** Every merged slice is a release, cut on `main` after the merge: a Semantic Versioning bump, a Keep a Changelog entry and a tag.
+- **Continuous deployment.** Every merged slice is a release, cut after the merge: a Semantic Versioning tag whose message carries Keep a Changelog notes, published as a GitHub Release. Nothing is committed to `main`; `CHANGELOG.md` is generated from the tags when needed.
 
 ## Lifecycle
 
@@ -57,7 +57,8 @@ The skills follow the [Agent Skills](https://agentskills.io/specification) stand
 | `verify [--base REF] [--title T] [--body B]` | For CI on pull requests: `lint`, frozen tests intact, slice closed, title in line |
 | `next-id {idea,slice,adr}`                   | Print the next free ID                                                            |
 | `pr SLICE [--title\|--body]`                 | Print the pull request title and body of a closed slice                           |
-| `release [--apply]`                          | After merging, release every slice merged since the last release                  |
+| `release [--apply]`                          | After merging, tag every slice merged since the last release, with its notes      |
+| `changelog [--unit U] [--output F]`          | Render `CHANGELOG.md` from the release tags                                       |
 
 ## Installation
 
@@ -93,7 +94,7 @@ full = "pytest"            # runs the full suite
 
 [[units]]                  # release units; omit for a single unit tagged vX.Y.Z
 name = "api"
-paths = ["services/api"]   # tagged api/vX.Y.Z, changelog in services/api/CHANGELOG.md
+paths = ["services/api"]   # tagged api/vX.Y.Z; `sdd.py changelog --unit api` renders its changelog
 ```
 
 ## Development

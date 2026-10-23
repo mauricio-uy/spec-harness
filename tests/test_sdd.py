@@ -186,6 +186,24 @@ class HarnessTest(unittest.TestCase):
             text = re.sub(r"^supersedes:\s*", f"supersedes: {supersedes} ", text, flags=re.M)
         self.repo.write(f".agents/docs/adr/{adr}-decision.md", text)
 
+    def merge(self, sid="S-001", message: str | None = None) -> str:
+        """Commit the slice the way a squash merge of its pull request would."""
+        self.repo.git("add", "-A")
+        self.repo.git("commit", "-q", "-m", message or self.ok("pr", sid))
+        return self.repo.git("rev-parse", "HEAD").strip()
+
+    def ship(self, sid: str) -> str:
+        self.repo.write("app/greet.py", STUB)
+        self.new_slice(sid)
+        self.to_done(sid)
+        return self.merge(sid)
+
+    def tags(self) -> list[str]:
+        return self.repo.git("tag", "--list").split()
+
+    def tag_message(self, tag: str) -> str:
+        return self.repo.git("tag", "-l", "--format=%(contents)", tag)
+
 
 class FrontMatterTest(unittest.TestCase):
     def test_parses_values_and_ignores_comments(self):
@@ -210,17 +228,6 @@ class FrontMatterTest(unittest.TestCase):
         self.assertEqual(sdd.bump((1, 2, 3), "major"), (2, 0, 0))
         self.assertEqual(sdd.bump((1, 2, 3), "minor"), (1, 3, 0))
         self.assertEqual(sdd.bump((1, 2, 3), "patch"), (1, 2, 4))
-
-    def test_changelog_puts_newest_release_first(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "CHANGELOG.md"
-            sdd.write_changelog(path, "0.1.0", {"Added": ["- first"]})
-            sdd.write_changelog(path, "0.2.0", {"Fixed": ["- third"], "Added": ["- second"]})
-            text = path.read_text(encoding="utf-8")
-        self.assertTrue(text.startswith("# Changelog"))
-        self.assertLess(text.index("## [0.2.0]"), text.index("## [0.1.0]"))
-        self.assertIn("## [0.2.0]", text)
-        self.assertLess(text.index("- second"), text.index("### Fixed"))
 
 
 class LifecycleTest(HarnessTest):
@@ -316,31 +323,19 @@ class PullRequestTest(HarnessTest):
 
 
 class ReleaseTest(HarnessTest):
-    def merge(self, sid="S-001", message: str | None = None) -> str:
-        """Commit the slice the way a squash merge of its pull request would."""
-        self.repo.git("add", "-A")
-        self.repo.git("commit", "-q", "-m", message or self.ok("pr", sid))
-        return self.repo.git("rev-parse", "HEAD").strip()
-
-    def ship(self, sid: str) -> str:
-        self.repo.write("app/greet.py", STUB)
-        self.new_slice(sid)
-        self.to_done(sid)
-        return self.merge(sid)
-
-    def test_release_after_squash_merge(self):
+    def test_release_tags_the_merged_commit(self):
         squash = self.ship("S-001")
-        self.ok("release", "--apply", "--trailer", "Reviewed-by: Someone")
-        head = self.repo.git("rev-parse", "HEAD").strip()
-        self.assertEqual(self.repo.git("rev-parse", "HEAD^").strip(), squash)
-        self.assertEqual(self.repo.git("rev-list", "-n1", "v0.1.0").strip(), head)
-        message = self.repo.git("log", "-1", "--format=%B")
-        self.assertTrue(message.startswith("chore(release): v0.1.0\n\nReleases S-001.\n"))
-        self.assertIn("Reviewed-by: Someone", message)
-        changelog = self.repo.read("CHANGELOG.md")
-        self.assertIn("## [0.1.0]", changelog)
-        self.assertIn("### Added", changelog)
-        self.assertIn("(.agents/docs/archive/S-001-greet/spec.md)", changelog)
+        out = self.ok("release")
+        self.assertIn("v0.1.0", out)
+        self.assertIn("dry run", out)
+        self.assertEqual(self.tags(), [])
+        self.ok("release", "--apply")
+        self.assertEqual(self.repo.git("rev-parse", "HEAD").strip(), squash)
+        self.assertEqual(self.repo.git("rev-list", "-n1", "v0.1.0").strip(), squash)
+        message = self.tag_message("v0.1.0")
+        self.assertTrue(message.startswith("Release v0.1.0 (S-001)\n\n### Added\n\n"))
+        self.assertIn("- Users can be greeted by name. (S-001)", message)
+        self.assertFalse(self.repo.exists("CHANGELOG.md"))
         self.assertIn("nothing to release", self.ok("release", "--apply"))
 
     def test_each_merge_released_on_its_own(self):
@@ -348,20 +343,15 @@ class ReleaseTest(HarnessTest):
         self.ok("release", "--apply")
         self.ship("S-002")
         self.ok("release", "--apply")
-        self.assertEqual(self.repo.git("tag", "--list").split(), ["v0.1.0", "v0.2.0"])
-        changelog = self.repo.read("CHANGELOG.md")
-        self.assertLess(changelog.index("[S-002]"), changelog.index("## [0.1.0]"))
+        self.assertEqual(self.tags(), ["v0.1.0", "v0.2.0"])
+        self.assertIn("(S-002)", self.tag_message("v0.2.0").splitlines()[0])
 
     def test_merges_pending_together_share_one_release(self):
         self.ship("S-001")
         self.ship("S-002")
-        out = self.ok("release", "--apply")
-        self.assertIn("released v0.1.0", out)
-        self.assertEqual(self.repo.git("tag", "--list").split(), ["v0.1.0"])
-        self.assertIn("(S-001, S-002)", self.repo.git("tag", "-n1", "v0.1.0"))
-        changelog = self.repo.read("CHANGELOG.md")
-        self.assertIn("[S-001]", changelog)
-        self.assertIn("[S-002]", changelog)
+        self.assertIn("released v0.1.0", self.ok("release", "--apply"))
+        self.assertEqual(self.tags(), ["v0.1.0"])
+        self.assertTrue(self.tag_message("v0.1.0").startswith("Release v0.1.0 (S-001, S-002)\n"))
 
     def test_detects_slice_without_trailer(self):
         self.repo.write("app/greet.py", STUB)
@@ -374,7 +364,7 @@ class ReleaseTest(HarnessTest):
         self.repo.write(".agents/config.toml", CONFIG + UNITS)
         self.repo.git("add", "-A")
         self.repo.git("commit", "-qm", "chore: declare release units")
-        self.repo.git("tag", "app/v1.0.0")
+        self.repo.git("tag", "-a", "app/v1.0.0", "-m", "Release app/v1.0.0")
         self.new_slice(change="changed", breaking="[app]")
         self.to_done()
         self.merge()
@@ -382,13 +372,34 @@ class ReleaseTest(HarnessTest):
         self.assertIn("app/v2.0.0", out)
         self.assertNotIn("web/", out)
         self.ok("release", "--apply")
-        self.assertIn("**BREAKING:**", self.repo.read("app/CHANGELOG.md"))
+        self.assertIn("**BREAKING:**", self.tag_message("app/v2.0.0"))
 
     def test_nothing_to_release_without_slices(self):
         self.repo.write("README.md", "# Shop\n")
         self.merge(message="docs: add readme")
         self.assertIn("nothing to release", self.ok("release", "--apply"))
-        self.assertEqual(self.repo.git("tag", "--list"), "")
+        self.assertEqual(self.tags(), [])
+
+
+class ChangelogTest(HarnessTest):
+    def test_renders_releases_newest_first(self):
+        self.ship("S-001")
+        self.ok("release", "--apply")
+        self.ship("S-002")
+        self.ok("release", "--apply")
+        text = self.ok("changelog")
+        self.assertTrue(text.startswith("# Changelog\n"))
+        self.assertLess(text.index("## [0.2.0] - "), text.index("## [0.1.0] - "))
+        self.assertLess(text.index("(S-002)"), text.index("## [0.1.0]"))
+        self.ok("changelog", "--output", str(self.repo.root / "CHANGELOG.md"))
+        self.assertEqual(self.repo.read("CHANGELOG.md"), text)
+
+    def test_requires_a_unit_when_units_exist(self):
+        self.repo.write(".agents/config.toml", CONFIG + UNITS)
+        self.assertIn("pass --unit", self.fails("changelog"))
+        self.repo.git("tag", "-a", "app/v1.0.0", "--cleanup=verbatim", "-m", "Release app/v1.0.0 (S-001)\n\n### Added\n\n- Greeting. (S-001)\n")
+        self.assertIn("## [1.0.0]", self.ok("changelog", "--unit", "app"))
+        self.assertNotIn("## [", self.ok("changelog", "--unit", "web"))
 
 
 class AdrTest(HarnessTest):

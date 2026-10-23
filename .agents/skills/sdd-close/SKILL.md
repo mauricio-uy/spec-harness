@@ -47,13 +47,14 @@ Record what was delivered, fold it into the living spec and hand the slice over 
 Releases happen after the merge, on `main`, never on the slice branch:
 
 - Merge with **squash**, using the pull request title and body as the commit message, so the `Slice:` trailer reaches `main`. A direct commit to `main` that archives the slice works too.
-- The release workflow (proposed by `sdd-init`) runs `sdd.py release --apply` on every push to `main`. Without it, run it locally after `git pull`, then `git push --follow-tags`.
-- For each slice merged since the last release, it bumps the version of every release unit whose files changed, adds the changelog entry, commits `chore(release): <tags>` and creates the tags.
+- The release workflow (proposed by `sdd-init`) runs `sdd.py release --apply` on every push to `main`. Without it, run it locally after `git pull`, then `git push --tags`.
+- For the slices merged since the last release, it bumps the version of every release unit whose files changed and creates an annotated tag on the merged commit. The tag message carries the release notes; the workflow publishes them as a GitHub Release. Nothing is committed to `main`.
+- `CHANGELOG.md` is generated from the tags when needed: `sdd.py changelog`.
 
 Release units are declared in `.agents/config.toml`. Without units, the whole repository is one unit tagged `vX.Y.Z`.
 
 ```toml
 [[units]]
 name = "api"
-paths = ["services/api"]   # tags api/vX.Y.Z, changelog in services/api/CHANGELOG.md
+paths = ["services/api"]   # tagged api/vX.Y.Z; `sdd.py changelog --unit api` renders its changelog
 ```
