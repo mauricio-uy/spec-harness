@@ -1,6 +1,6 @@
 ---
 name: sdd-close
-description: Closes a green slice by writing close.md, merging its acceptance criteria into the living capability spec, checking runbooks, archiving it, and opening its pull request; the release follows the merge. Use when a slice is green, or when asked to finish, ship or release a slice.
+description: Closes a green slice by writing close.md, merging its acceptance criteria into the living capability spec, checking runbooks, archiving it, and opening its pull request for review. Use when a slice is green, or when asked to finish a slice or open its pull request. Releasing after the merge belongs to sdd-release.
 license: MIT
 compatibility: Requires git and Python 3.11+. Expects the spec-harness CLI at .agents/bin/sdd.py.
 metadata:
@@ -10,7 +10,7 @@ metadata:
 
 # sdd-close
 
-Record what was delivered, fold it into the living spec and hand the slice over as one pull request. With continuous deployment, every merged slice is a release.
+Record what was delivered, fold it into the living spec and hand the slice over as one pull request.
 
 ## Harness
 
@@ -40,22 +40,6 @@ Record what was delivered, fold it into the living spec and hand the slice over 
 3. Run `sdd.py pr <ID>`. It prints the pull request title (a Conventional Commit subject built from the spec) and body: goal, acceptance criteria, notes from `close.md`, and the `Slice:` trailer last.
 4. **Checkpoint**: show the user the title, the body and the branch's changes, and wait for confirmation.
 5. Push the branch and open the pull request with exactly that title and body, e.g. `gh pr create --title "$(sdd.py pr <ID> --title)" --body "$(sdd.py pr <ID> --body)"`. Do not edit the trailers.
-6. Do not merge unless the user asks.
+6. Do not merge unless the user asks. When asked, merge with **squash**, using the pull request title and body as the commit message, so the slice reaches `main` as one commit carrying the `Slice:` trailer.
 
-## Release
-
-Releases happen after the merge, on `main`, never on the slice branch:
-
-- Merge with **squash**, using the pull request title and body as the commit message, so the slice reaches `main` as one commit carrying the `Slice:` trailer. A release attributes to a slice exactly what its commit changed, so a direct commit to `main` works only if it holds the whole slice.
-- The release workflow (proposed by `sdd-init`) runs `sdd.py release --apply` on every push to `main`. Without it, run it locally after `git pull`, then `git push --follow-tags origin main`, which pushes only the new release tags.
-- Each release unit is released on its own: the slices merged since its last tag whose commit touched its files bump its version, and an annotated tag goes on the last of those commits. The tag message carries the release notes; the workflow publishes them as a GitHub Release. Nothing is committed to `main`.
-- Commits without a slice ship in their unit's next version but are not named in its notes, and a slice whose commit touches no release unit is never released; `release` says so.
-- `CHANGELOG.md` is generated from the tags when needed: `sdd.py changelog`.
-
-Release units are declared in `.agents/config.toml`. Without units, the whole repository is one unit tagged `vX.Y.Z`.
-
-```toml
-[[units]]
-name = "api"
-paths = ["services/api"]   # tagged api/vX.Y.Z; `sdd.py changelog --unit api` renders its changelog
-```
+After the merge, the slice is released on `main` by the release workflow, or with `sdd-release` where there is none.
