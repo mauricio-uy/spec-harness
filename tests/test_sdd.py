@@ -427,13 +427,20 @@ class MonorepoReleaseTest(HarnessTest):
         self.ok("release", "--apply")
         self.assertEqual(self.tags(), ["app/v0.1.0", "app/v0.2.0"])
 
-    def test_reports_slices_that_touch_no_unit(self):
+    def test_reports_a_slice_that_touches_no_unit_until_the_next_release(self):
+        notice = "S-002 touches no release unit: not released"
         self.ship("S-001")
         self.ok("release", "--apply")
         self.ship("S-002")  # ends with the same app/greet.py: only tests and docs change
-        out = self.ok("release")
-        self.assertIn("S-002 touches no release unit: not released", out)
+        out = self.ok("release", "--apply")
+        self.assertIn(notice, out)
         self.assertIn("nothing to release", out)
+        self.repo.write("app/farewell.py", "def farewell(name):\n    return f'Bye, {name}!'\n")
+        self.ship("S-003")
+        out = self.ok("release", "--apply")
+        self.assertIn(notice, out)  # planned before app/v0.2.0 exists: repeats once
+        self.assertIn("released app/v0.2.0", out)
+        self.assertNotIn(notice, self.ok("release", "--apply"))
 
     def test_recovers_the_tag_of_a_single_unit(self):
         self.repo.write("web/index.html", "<h1>Greeter</h1>\n")

@@ -869,17 +869,26 @@ def tagged_slices(message: str) -> set[str]:
     return set(m.group(1).split(", ")) if m else set()
 
 
-def commit_slices(sha: str) -> list[str]:
-    ids = SLICE_TRAILER_RE.findall(git("log", "-1", "--format=%B", sha))
-    if ids:
-        return ids
-    # Fallback when the trailer was edited out: the closing commit adds the archived slice.
-    added = git("diff-tree", "--root", "--no-commit-id", "--name-only", "-r", "--diff-filter=A", sha)
-    return sorted({m.group(1) for path in added.splitlines() if (m := re.match(r"\.agents/docs/archive/(S-\d+)-", path))})
-
-
-def commit_files(sha: str) -> list[str]:
-    return git("diff-tree", "--root", "--no-commit-id", "--name-only", "-r", "-m", "--first-parent", sha).splitlines()
+def first_parent_history() -> list[tuple[str, list[str], list[str]]]:
+    """(commit, slice IDs, changed files) of every first-parent commit, newest first, in one git call."""
+    out = git("-c", "core.quotePath=false", "log", "--first-parent", "-m", "--name-status",
+              "--format=%x01%H%x00%B%x02", check=False)
+    history = []
+    for record in out.split("\x01")[1:]:
+        head, _, changes = record.partition("\x02")
+        sha, _, message = head.partition("\0")
+        files, added = [], []
+        for line in changes.splitlines():
+            status, *paths = line.split("\t")
+            files += paths
+            if status.startswith("A"):
+                added += paths
+        ids = SLICE_TRAILER_RE.findall(message)
+        if not ids:
+            # Fallback when the trailer was edited out: the closing commit adds the archived slice.
+            ids = sorted({m.group(1) for path in added if (m := re.match(r"\.agents/docs/archive/(S-\d+)-", path))})
+        history.append((sha, ids, files))
+    return history
 
 
 def inside(path: str, unit_path: str) -> bool:
@@ -897,12 +906,12 @@ def release_plan(units: list[dict]) -> tuple[list[dict], list[str]]:
 
     A squash merge makes each slice one commit, so its own diff (sha^..sha) is exactly what it changed.
     Each unit is tagged on its last slice's commit, bumped by the strongest change among its slices.
-    Also returns the pending slices whose commit touched no unit at all, which are never released.
+    Also returns the slices merged since the newest release tag whose commit touched no unit at all:
+    they are never released, and reporting only recent ones keeps the notice from repeating.
     """
     names = {u.get("name", "") for u in units}
-    history = git("log", "--first-parent", "--format=%H", check=False).splitlines()
+    history = first_parent_history()
     tags = release_tags()
-    commits: dict[str, tuple[list[str], list[str]]] = {}
     slices: dict[str, Slice] = {}
 
     def closed(sid: str) -> Slice:
@@ -919,25 +928,28 @@ def release_plan(units: list[dict]) -> tuple[list[dict], list[str]]:
     def touches(files: list[str], unit: dict) -> bool:
         return not unit.get("name") or any(inside(f, p) for f in files for p in unit.get("paths", ["."]))
 
-    plan, untouched = [], set()
+    def since(tagged: set[str]) -> list[tuple[str, list[str], list[str]]]:
+        """The commits after the newest of `tagged`, oldest first."""
+        pending = []
+        for commit in history:
+            if commit[0] in tagged:
+                break
+            pending.append(commit)
+        return pending[::-1]
+
+    untouched = sorted({
+        sid for _, ids, files in since({commit for _, commit, _ in tags})
+        if not any(touches(files, u) for u in units) for sid in ids
+    })
+
+    plan = []
     for unit in units:
         name = unit.get("name", "")
         own = [(commit, message) for tag, commit, message in tags if tag_unit(tag) == name]
-        tagged = {commit for commit, _ in own}
         released = set().union(*(tagged_slices(message) for _, message in own))
-        pending = []
-        for sha in history:
-            if sha in tagged:
-                break
-            pending.append(sha)
         chosen, target = [], None
-        for sha in reversed(pending):
-            if sha not in commits:
-                commits[sha] = (commit_slices(sha), commit_files(sha))
-            ids, files = commits[sha]
-            if ids and not any(touches(files, u) for u in units):
-                untouched.update(sid for sid in ids if sid not in released)
-            if not ids or not touches(files, unit):
+        for sha, ids, files in since({commit for commit, _ in own}):
+            if not touches(files, unit):
                 continue
             for sid in ids:
                 if sid not in released:
@@ -955,7 +967,7 @@ def release_plan(units: list[dict]) -> tuple[list[dict], list[str]]:
             "tag": f"{name}/v{version}" if name else f"v{version}",
             "target": target,
         })
-    return plan, sorted(untouched)
+    return plan, untouched
 
 
 def release_notes(slices: list[Slice], unit: str) -> str:
