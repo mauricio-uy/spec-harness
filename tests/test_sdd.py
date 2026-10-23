@@ -338,6 +338,14 @@ class ReleaseTest(HarnessTest):
         self.assertFalse(self.repo.exists("CHANGELOG.md"))
         self.assertIn("nothing to release", self.ok("release", "--apply"))
 
+    def test_tag_skips_later_commits_without_slices(self):
+        squash = self.ship("S-001")
+        self.repo.write("README.md", "# Shop\n")
+        self.merge(message="docs: add readme")
+        self.ok("release", "--apply")
+        self.assertEqual(self.repo.git("rev-list", "-n1", "v0.1.0").strip(), squash)
+        self.assertNotEqual(self.repo.git("rev-parse", "HEAD").strip(), squash)
+
     def test_each_merge_released_on_its_own(self):
         self.ship("S-001")
         self.ok("release", "--apply")

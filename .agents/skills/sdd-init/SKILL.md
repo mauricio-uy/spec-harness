@@ -35,12 +35,12 @@ Give every agent working on the project a shared base: what the system is, the w
 6. **Pull requests and releases**: each slice is one branch and one squash-merged pull request, released after the merge. On GitHub, propose the setup in [the GitHub guide](references/github.md), in its order:
    1. add [the check workflow](assets/check.yml) and [the release workflow](assets/release.yml) in one pull request, and merge it;
    2. set squash merges to use the pull request title and description (`PR_TITLE`, `PR_BODY`);
-   3. once `sdd verify` has run, protect `main` with a ruleset that requires it; releases only create tags, so no bypass is needed;
+   3. once `sdd verify` has run, protect `main` with a ruleset that requires it, and protect release tags from deletion and moves; releases only create tags, so neither needs a bypass for the workflow;
    4. if the project deploys on release, do it from the `deploy` job in `release.yml`: tags created by the workflow trigger no other workflow.
 
    Ask before changing repository settings. The project's own test suite needs its own CI workflow; recommend one if it is missing, but leave it to the project's stack. A package that ships a `CHANGELOG.md` generates it at build time with `sdd.py changelog`.
 
-   Without the release workflow, releases run locally after each merge: `sdd.py release --apply`, then `git push --tags`.
+   Without the release workflow, releases run locally after each merge: `sdd.py release --apply`, then `git push --follow-tags origin main`.
 7. Run `sdd.py init`: it adds the harness block to `AGENTS.md` (between `sdd:begin`/`sdd:end` markers, leaving the rest untouched) and generates the index.
 8. Run `sdd.py lint` and fix what it reports.
 9. **Checkpoint**: show the user the overview, glossary, configuration and release setup for review.

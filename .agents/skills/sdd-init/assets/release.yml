@@ -29,19 +29,24 @@ jobs:
           python-version: "3.x"
       - name: Release merged slices
         id: release
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          before=$(git tag --points-at HEAD | sort)
+          before=$(git tag --list | sort)
           python .agents/bin/sdd.py release --apply
-          tags=$(comm -13 <(echo "$before") <(git tag --points-at HEAD | sort) | xargs)
+          tags=$(comm -13 <(echo "$before") <(git tag --list | sort) | xargs)
           for tag in $tags; do
             git push origin "refs/tags/$tag"
-            gh release create "$tag" --verify-tag --notes-from-tag --title "$tag"
           done
           echo "tags=$tags" >> "$GITHUB_OUTPUT"
+      - name: Publish missing GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Also covers tags whose release failed to publish in an earlier run.
+          for tag in $(git tag --list 'v[0-9]*' '*/v[0-9]*' --sort=-creatordate | head -n 20); do
+            gh release view "$tag" > /dev/null 2>&1 || gh release create "$tag" --verify-tag --notes-from-tag --title "$tag"
+          done
 
   # Tags and releases created with GITHUB_TOKEN do not trigger other workflows, so deploy
   # from here. Uncomment and point it at the project's deployment, e.g. a reusable workflow.

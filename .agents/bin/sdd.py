@@ -942,11 +942,12 @@ def cmd_release(args, config) -> int:
     units = config.get("units") or [{"name": "", "paths": ["."]}]
     released = released_slices()
     previous, pending = pending_slices()
-    merged = []
+    merged, target = [], None
     for sha, sid in pending:
         files, previous = files_between(previous, sha), sha
         if sid not in released:
             merged.append((Slice(sid), files))
+            target = sha
     plan = release_plan(merged, units)
     if not plan:
         print("nothing to release")
@@ -955,14 +956,15 @@ def cmd_release(args, config) -> int:
     for p in plan:
         print(f"{p['tag']:<20} {', '.join(sl.id for sl in p['slices'])}")
     if not args.apply:
-        print("\ndry run: pass --apply to create the annotated tags on HEAD")
+        print(f"\ndry run: pass --apply to tag {git('rev-parse', '--short', target).strip()}, the last released slice's commit")
         return 0
 
     for p in plan:
         message = f"Release {p['tag']} ({', '.join(sl.id for sl in p['slices'])})\n\n{release_notes(p['slices'], p['name'])}"
+        # The last slice's commit, not HEAD: later unreleased commits stay out of this version.
         # Verbatim, or git strips the notes' `###` headings as comments.
-        subprocess.run(["git", "tag", "-a", p["tag"], "--cleanup=verbatim", "-F", "-"], cwd=ROOT, input=message, text=True, check=True)
-    print(f"released {', '.join(p['tag'] for p in plan)} on {git('rev-parse', '--short', 'HEAD').strip()}")
+        subprocess.run(["git", "tag", "-a", p["tag"], target, "--cleanup=verbatim", "-F", "-"], cwd=ROOT, input=message, text=True, check=True)
+    print(f"released {', '.join(p['tag'] for p in plan)} on {git('rev-parse', '--short', target).strip()}")
     return 0
 
 

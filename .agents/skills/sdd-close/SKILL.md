@@ -35,8 +35,8 @@ Record what was delivered, fold it into the living spec and hand the slice over 
 
 ## Pull request
 
-1. Run `sdd.py verify --base origin/main` and fix every error. It runs `lint` (broken links, unknown IDs, tests without a criterion, criteria without a test) plus the checks the pull request will face in CI.
-2. Commit the remaining changes on the slice branch with explicit paths (code, tests, `.agents/` documents). Leave unrelated changes out.
+1. Commit the remaining changes on the slice branch with explicit paths (code, tests, `.agents/` documents). Leave unrelated changes out.
+2. Run `sdd.py verify --base origin/main` and fix every error, committing the fixes. It checks the commits on the branch, exactly as CI will: `lint` (broken links, unknown IDs, tests without a criterion, criteria without a test), frozen tests, and that the slice is closed.
 3. Run `sdd.py pr <ID>`. It prints the pull request title (a Conventional Commit subject built from the spec) and body: goal, acceptance criteria, notes from `close.md`, and the `Slice:` trailer last.
 4. **Checkpoint**: show the user the title, the body and the branch's changes, and wait for confirmation.
 5. Push the branch and open the pull request with exactly that title and body, e.g. `gh pr create --title "$(sdd.py pr <ID> --title)" --body "$(sdd.py pr <ID> --body)"`. Do not edit the trailers.
@@ -47,7 +47,7 @@ Record what was delivered, fold it into the living spec and hand the slice over 
 Releases happen after the merge, on `main`, never on the slice branch:
 
 - Merge with **squash**, using the pull request title and body as the commit message, so the `Slice:` trailer reaches `main`. A direct commit to `main` that archives the slice works too.
-- The release workflow (proposed by `sdd-init`) runs `sdd.py release --apply` on every push to `main`. Without it, run it locally after `git pull`, then `git push --tags`.
+- The release workflow (proposed by `sdd-init`) runs `sdd.py release --apply` on every push to `main`. Without it, run it locally after `git pull`, then `git push --follow-tags origin main`, which pushes only the new release tags.
 - For the slices merged since the last release, it bumps the version of every release unit whose files changed and creates an annotated tag on the merged commit. The tag message carries the release notes; the workflow publishes them as a GitHub Release. Nothing is committed to `main`.
 - `CHANGELOG.md` is generated from the tags when needed: `sdd.py changelog`.
 
