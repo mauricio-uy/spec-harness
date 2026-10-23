@@ -40,7 +40,7 @@ Give every agent working on the project a shared base: what the system is, the w
 
    Ask before changing repository settings. The project's own test suite needs its own CI workflow; recommend one if it is missing, but leave it to the project's stack. A package that ships a `CHANGELOG.md` generates it at build time with `sdd.py changelog`.
 
-   Without the release workflow, releases run locally after each merge: `sdd.py release --apply`, then `git push --follow-tags origin main`.
+   Without the release workflow, releases run locally after each merge with `sdd-release`. After the first merge, check the release with it too.
 7. Run `sdd.py init`: it adds the harness block to `AGENTS.md` (between `sdd:begin`/`sdd:end` markers, leaving the rest untouched) and generates the index.
 8. Run `sdd.py lint` and fix what it reports.
 9. **Checkpoint**: show the user the overview, glossary, configuration and release setup for review.

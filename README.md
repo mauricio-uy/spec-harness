@@ -14,13 +14,13 @@ A minimalist harness for AI coding agents that combines spec-driven development 
 ## Lifecycle
 
 ```
-sdd-idea ──► sdd-spec ──► sdd-red ──► sdd-green ──► sdd-close ──► merge ──► release
-(optional)    draft→ready   ready→red    red→green     green→done     squash     on main
+sdd-idea ──► sdd-spec ──► sdd-red ──► sdd-green ──► sdd-close ──► merge ──► sdd-release
+(optional)    draft→ready   ready→red    red→green     green→done     squash     tags on main
               + branch                                 + PR
                    ✋            ✋                          ✋
 ```
 
-✋ marks a checkpoint: the skill stops and waits for approval. The release runs after the merge, from a CI workflow or locally, and covers every slice merged since the last release.
+✋ marks a checkpoint: the skill stops and waits for approval. The release runs after the merge, from a CI workflow or locally with `sdd-release`, and covers every slice merged since the last release.
 
 On GitHub, `sdd-init` proposes two workflows: **check** runs `sdd.py verify` on every pull request, so the rules hold even when a skill is skipped, and **release** cuts the release on every push to `main`.
 
@@ -28,17 +28,18 @@ On GitHub, `sdd-init` proposes two workflows: **check** runs `sdd.py verify` on 
 
 The skills follow the [Agent Skills](https://agentskills.io/specification) standard and live in `.agents/skills/`.
 
-| Skill        | Purpose                                                                                 |
-|--------------|-----------------------------------------------------------------------------------------|
-| `sdd-init`   | Set up a project: overview, glossary, tests, releases and the `AGENTS.md` block         |
-| `sdd-idea`   | Decompose an idea into candidate slices                                                 |
-| `sdd-spec`   | Write a slice spec and take it to `ready`, or amend it                                  |
-| `sdd-adr`    | Record a cross-cutting decision, or replace an outdated one                             |
-| `sdd-red`    | Write the failing acceptance tests and freeze them                                      |
-| `sdd-green`  | Implement with TDD until the frozen tests and the full suite pass                       |
-| `sdd-close`  | Close the slice, merge it into the living spec and open its pull request                |
-| `sdd-next`   | Run the next phase of a slice, stopping at checkpoints                                  |
-| `sdd-status` | Report work in progress and what comes next                                             |
+| Skill         | Purpose                                                                         |
+|---------------|---------------------------------------------------------------------------------|
+| `sdd-init`    | Set up a project: overview, glossary, tests, releases and the `AGENTS.md` block |
+| `sdd-idea`    | Decompose an idea into candidate slices                                         |
+| `sdd-spec`    | Write a slice spec and take it to `ready`, or amend it                          |
+| `sdd-adr`     | Record a cross-cutting decision, or replace an outdated one                     |
+| `sdd-red`     | Write the failing acceptance tests and freeze them                              |
+| `sdd-green`   | Implement with TDD until the frozen tests and the full suite pass               |
+| `sdd-close`   | Close the slice, merge it into the living spec and open its pull request        |
+| `sdd-release` | Release merged slices, check releases, render the changelog and declare `1.0.0` |
+| `sdd-next`    | Run the next phase of a slice, stopping at checkpoints                          |
+| `sdd-status`  | Report work in progress and what comes next                                     |
 
 ## CLI
 
