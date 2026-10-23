@@ -10,12 +10,14 @@ Commands (run from anywhere inside the repository):
   status [SLICE]            list open slices, or show one slice and its next gate
   check SLICE               verify the gate to the next status (runs tests when needed)
   advance SLICE             check the gate and move the slice to the next status
-  reopen SLICE              send a slice back to draft and unfreeze its acceptance tests
+  reopen SLICE [--base REF] send a slice back to draft and unfreeze its acceptance tests; a closed
+                            slice can be reopened until it reaches the base branch (default origin/main)
   accept ADR                accept a proposed ADR and supersede the one it replaces
   lint                      check links, ID references, AC-to-test traceability and vocabulary
   verify [--base REF] [--title TEXT] [--body TEXT]
-                            for CI on pull requests: lint, open slices still meet their gates
-                            (frozen tests intact), and the pull request closes its slice properly
+                            for CI on pull requests: lint, open slices and the slices the pull
+                            request closes still meet their gates (frozen tests intact), and the
+                            pull request closes its slice properly
   next-id {idea,slice,adr}  print the next free ID
   pr SLICE [--title|--body] print the pull request title and body of a closed slice
   release [--apply]         after merging, tag every release unit touched by the slices merged
@@ -695,6 +697,8 @@ def cmd_verify(args, config) -> int:
                 errors.append(f"{sid} is still open ({Slice(sid).status}): close it with sdd-close before merging")
         for sid in closed:
             sl = Slice(sid)
+            # Review changes after closing keep every gate the slice passed; tests are not run here.
+            errors += [f"{sid} (done): {e}" for gate in (gate_ready, gate_green, gate_done) for e in gate(sl, config, run=False)]
             expected = commit_title(sl)
             if args.title is not None and args.title.split(":")[0] != expected.split(":")[0]:
                 errors.append(f"pull request title should start with '{expected.split(':')[0]}:' for {sid}; `sdd.py pr {sid} --title` gives it")
@@ -754,10 +758,24 @@ def cmd_advance(args, config) -> int:
     return 0
 
 
+def merged_slices(base: str) -> set[str]:
+    """Slices archived on `base`: closed and merged, so they can no longer be reopened."""
+    if not git("rev-parse", "--verify", "--quiet", f"{base}^{{commit}}", check=False):
+        fail(f"base ref {base} not found; pass --base with the branch slices merge into")
+    names = git("ls-tree", "--name-only", f"{base}:.agents/docs/archive", check=False).splitlines()
+    return {m.group(0) for name in names if (m := re.match(r"S-\d+", name))}
+
+
 def cmd_reopen(args, config) -> int:
     sl = Slice(args.slice)
     if sl.dir.parent.name == "archive":
-        fail(f"{sl.id} is closed; start a new slice instead")
+        # A closed slice whose pull request is still open can take review changes to its spec or tests.
+        if sl.id in merged_slices(args.base):
+            fail(f"{sl.id} is merged into {args.base}; start a new slice instead")
+        target = DOCS / "changes" / sl.dir.name
+        target.parent.mkdir(exist_ok=True)
+        shutil.move(str(sl.dir), str(target))
+        sl = Slice(sl.id)
     (sl.dir / ".frozen.json").unlink(missing_ok=True)
     set_front(sl.spec, "status", "draft")
     write_index()
@@ -1034,8 +1052,11 @@ def main() -> int:
     commands.add_parser("init")
     commands.add_parser("index").add_argument("--check", action="store_true")
     commands.add_parser("status").add_argument("slice", nargs="?")
-    for name in ("check", "advance", "reopen"):
+    for name in ("check", "advance"):
         commands.add_parser(name).add_argument("slice")
+    reopen = commands.add_parser("reopen")
+    reopen.add_argument("slice")
+    reopen.add_argument("--base", default="origin/main", help="branch closed slices merge into (default: origin/main)")
     commands.add_parser("accept").add_argument("adr")
     commands.add_parser("lint")
     verify = commands.add_parser("verify")

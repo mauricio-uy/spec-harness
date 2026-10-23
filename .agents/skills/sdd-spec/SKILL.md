@@ -60,6 +60,6 @@ Add a plan only when the slice is not obvious (several modules, a design choice,
 
 When the spec must change after `ready` (including when an acceptance test turns out to be wrong):
 
-1. Run `sdd.py reopen <ID>`: status returns to `draft` and acceptance tests are unfrozen.
+1. Run `sdd.py reopen <ID>`: status returns to `draft` and acceptance tests are unfrozen. A closed slice can be reopened while it is not merged into `main`, e.g. for review feedback (see `sdd-revise`); once merged, the change is a new slice.
 2. Edit the spec. Never renumber criteria: strike a removed one as `- ~~**AC-n:** …~~` and add new ones with the next number.
 3. Tell the user which acceptance tests must be rewritten, then run the gate again.

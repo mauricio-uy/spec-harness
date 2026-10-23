@@ -31,6 +31,8 @@ Dispatcher over the slice lifecycle. Invoking it after a checkpoint counts as th
    | green  | Activate `sdd-close` | Stop at its checkpoint (pull request)       |
    | done   | Nothing to advance   | Propose the top candidate from `sdd-status` |
 
+   A `done` slice whose pull request has review changes is revised with `sdd-revise`.
+
 3. If there is no open slice, propose promoting the top idea candidate with `sdd-spec`, or capturing a new idea with `sdd-idea`.
 
 ## Rules

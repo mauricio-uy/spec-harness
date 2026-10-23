@@ -297,6 +297,23 @@ class LifecycleTest(HarnessTest):
         self.assertFalse(self.repo.exists(f"{folder}/.frozen.json"))
         self.assertIn("status: draft", self.repo.read(f"{folder}/spec.md"))
 
+    def test_reopens_a_closed_slice_until_it_is_merged(self):
+        base = self.repo.git("rev-parse", "HEAD").strip()
+        folder = self.new_slice()
+        self.to_done()
+        self.ok("reopen", "S-001", "--base", base)
+        self.assertFalse(self.repo.exists(".agents/docs/archive/S-001-greet"))
+        self.assertFalse(self.repo.exists(f"{folder}/.frozen.json"))
+        self.assertIn("status: draft", self.repo.read(f"{folder}/spec.md"))
+        self.assertIn("S-001", self.ok("status"))
+
+    def test_merged_slice_cannot_be_reopened(self):
+        self.new_slice()
+        self.to_done()
+        merged = self.merge()
+        self.assertIn(f"S-001 is merged into {merged}", self.fails("reopen", "S-001", "--base", merged))
+        self.assertIn("base ref origin/main not found", self.fails("reopen", "S-001"))
+
 
 class PullRequestTest(HarnessTest):
     def test_title_and_body_come_from_the_spec(self):
@@ -647,6 +664,28 @@ class VerifyTest(HarnessTest):
         self.assertIn("should start with 'feat(greeting):' for S-001", out)
         out = self.ok("verify", "--base", self.base, "--title", title, "--body", "Greets users.")
         self.assertIn("lacks the 'Slice: S-001' trailer", out)
+
+    def test_pull_request_keeps_the_gates_of_the_slice_it_closes(self):
+        self.new_slice()
+        self.to_done()
+        self.commit()
+        test = "tests/test_s001.py"
+        self.repo.write(test, self.repo.read(test) + "# tampered\n")
+        self.repo.write(".agents/docs/specs/greeting.md", "# Greeting\n")
+        self.commit()
+        out = self.fails("verify", "--base", self.base)
+        self.assertIn("S-001 (done): frozen acceptance test modified: tests/test_s001.py", out)
+        self.assertIn("S-001 (done): S-001/AC-1 is not merged into greeting.md", out)
+
+    def test_acceptance_tests_of_merged_slices_can_change(self):
+        self.new_slice()
+        self.to_done()
+        self.commit()
+        merged = self.repo.git("rev-parse", "HEAD").strip()
+        test = "tests/test_s001.py"
+        self.repo.write(test, self.repo.read(test) + "# reworded later\n")
+        self.commit()
+        self.ok("verify", "--base", merged)
 
     def test_pull_request_that_leaves_its_slice_open(self):
         self.new_slice()
