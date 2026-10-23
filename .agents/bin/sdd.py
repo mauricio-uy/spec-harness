@@ -871,7 +871,8 @@ def tagged_slices(message: str) -> set[str]:
 
 def first_parent_history() -> list[tuple[str, list[str], list[str]]]:
     """(commit, slice IDs, changed files) of every first-parent commit, newest first, in one git call."""
-    out = git("-c", "core.quotePath=false", "log", "--first-parent", "-m", "--name-status",
+    # --no-renames: a slice moved from changes/ to archive/ must show as added, for the fallback below.
+    out = git("-c", "core.quotePath=false", "log", "--first-parent", "-m", "--name-status", "--no-renames",
               "--format=%x01%H%x00%B%x02", check=False)
     history = []
     for record in out.split("\x01")[1:]:

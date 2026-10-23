@@ -383,6 +383,21 @@ class ReleaseTest(HarnessTest):
         self.merge(message="feat: greet users")
         self.assertIn("released v0.1.0", self.ok("release", "--apply"))
 
+    def test_detects_slice_without_trailer_moved_by_a_direct_commit(self):
+        # The whole slice folder is already on main, so closing it is a pure move to archive/,
+        # which git log reports as renames unless told otherwise.
+        self.repo.write("app/greet.py", STUB)
+        self.new_slice()
+        self.to_red()
+        self.repo.write("app/greet.py", IMPLEMENTATION)
+        self.ok("advance", "S-001")
+        self.repo.write(".agents/docs/changes/S-001-greet/close.md", CLOSE.format(id="S-001"))
+        self.repo.write(".agents/docs/specs/greeting.md", LIVING.format(id="S-001"))
+        self.merge(message="feat: greet users")
+        self.ok("advance", "S-001")
+        self.merge(message="docs: archive the greeting slice")
+        self.assertIn("released v0.1.0", self.ok("release", "--apply"))
+
     def test_bumps_only_affected_units(self):
         self.repo.write(".agents/config.toml", CONFIG + UNITS)
         self.repo.git("add", "-A")
