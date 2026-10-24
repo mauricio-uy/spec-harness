@@ -31,11 +31,11 @@ Dispatcher over the slice lifecycle. Invoking it after a checkpoint counts as th
    | green  | Activate `sdd-close` | Stop at its checkpoint (pull request)       |
    | done   | Nothing to advance   | Propose the top candidate from `sdd-status` |
 
-   A `done` slice whose pull request has review changes is revised with `sdd-revise`.
+   A fix slice (`track: fix` in its spec) goes through `sdd-fix` in `draft` and `ready`, which stops at its single checkpoint (spec and test review); from `red` on, it follows the table. A `done` slice whose pull request has review changes is revised with `sdd-revise`.
 
-3. If there is no open slice, propose promoting the top idea candidate with `sdd-spec`, or capturing a new idea with `sdd-idea`.
+3. If there is no open slice, propose promoting the top idea candidate with `sdd-spec`, or capturing a new idea with `sdd-idea`. A bug reported by the user goes to `sdd-fix`.
 
 ## Rules
 
-- Never skip a checkpoint: spec review (ready), test review (red) and pull request confirmation (close).
+- Never skip a checkpoint: spec review (ready), test review (red) and pull request confirmation (close). A fix slice joins the first two into one, at red.
 - If a phase fails its gate and cannot be fixed within that phase's rules, stop and report; do not jump phases.

@@ -6,7 +6,8 @@ A minimalist harness for AI coding agents that combines spec-driven development 
 
 - **Vertical slices.** One user-observable behavior per slice, 1–6 acceptance criteria, explicit boundaries and an explicit out of scope.
 - **Specs are the contract, tests are the proof.** Each acceptance criterion becomes a test before any implementation exists, and those tests are frozen together with their fixtures.
-- **Gates, not approvals.** A stdlib-only Python CLI verifies every transition. People step in at three checkpoints only: the spec, the acceptance tests and the pull request.
+- **Gates, not approvals.** A stdlib-only Python CLI verifies every transition. People step in at three checkpoints only: the spec, the acceptance tests and the pull request. A bug fix joins the first two.
+- **Process sized to the change.** A new behavior is a slice; a bug fix is a small slice with the same gates; a change that keeps behavior needs no slice.
 - **Living spec.** Closed slices merge into a spec of how the system behaves today, traceable to its tests.
 - **One slice, one pull request.** Each slice lives on its own branch and is squash-merged as one Conventional Commit carrying a `Slice:` trailer.
 - **Continuous deployment.** Every merged slice is a release, cut after the merge: a Semantic Versioning tag whose message carries Keep a Changelog notes, published as a GitHub Release. Nothing is committed to `main`; `CHANGELOG.md` is generated from the tags when needed.
@@ -22,6 +23,16 @@ sdd-idea ──► sdd-spec ──► sdd-red ──► sdd-green ──► sdd-
 
 ✋ marks a checkpoint: the skill stops and waits for approval. Review changes before the merge go through `sdd-revise`, on the same branch and pull request. The release runs after the merge, from a CI workflow or locally with `sdd-release`, and covers every slice merged since the last release.
 
+### Bug fixes
+
+`sdd-fix` takes a bug through a fix slice (`track: fix`): a short spec, at most two criteria that reproduce the bug, and one checkpoint for the spec and its failing tests together. `sdd-green` and `sdd-close` follow as usual. The CLI keeps it small: `change` is `fixed` or `security`, no plan and no new ADR. A fix that outgrows those limits continues as a regular slice.
+
+### Changes without a slice
+
+Refactors, docs, CI and dependency updates keep behavior, so they need no slice: one pull request with a Conventional Commit title, which `verify` accepts as long as `lint` passes. They ship in their unit's next release without a note. Any change to observable behavior, however small, goes through a slice.
+
+### Pull requests and releases
+
 On GitHub, `sdd-init` proposes two workflows: **check** runs `sdd.py verify` on every pull request, so the rules hold even when a skill is skipped, and **release** cuts the release on every push to `main`.
 
 ## Skills
@@ -33,6 +44,7 @@ The skills follow the [Agent Skills](https://agentskills.io/specification) stand
 | `sdd-init`    | Set up a project: overview, glossary, tests, releases and the `AGENTS.md` block |
 | `sdd-idea`    | Decompose an idea into candidate slices                                         |
 | `sdd-spec`    | Write a slice spec and take it to `ready`, or amend it                          |
+| `sdd-fix`     | Fix a bug through a small slice: short spec and failing tests, one checkpoint   |
 | `sdd-adr`     | Record a cross-cutting decision, or replace an outdated one                     |
 | `sdd-red`     | Write the failing acceptance tests and freeze them                              |
 | `sdd-green`   | Implement with TDD until the frozen tests and the full suite pass               |
