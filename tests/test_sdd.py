@@ -225,6 +225,13 @@ class FrontMatterTest(unittest.TestCase):
         self.assertEqual(lines[2], "superseded_by: ADR-002 # set by the CLI")
         self.assertEqual(lines[3], "base: abc")
 
+    def test_expand_fills_files_folders_and_ids(self):
+        args = ["go", "test", "-run", "Test{ident}", "{dirs}", "--slice={id}", "{files}"]
+        files = ["app/a_test.go", "app/b_test.go", "c_test.go"]
+        self.assertEqual(sdd.expand(args, "S-012", files), [
+            "go", "test", "-run", "TestS012", ".", "./app", "--slice=S-012", *files,
+        ])
+
     def test_bump_follows_semver_with_zero_major_rule(self):
         self.assertEqual(sdd.bump((0, 3, 1), "major"), (0, 4, 0))
         self.assertEqual(sdd.bump((1, 2, 3), "major"), (2, 0, 0))
@@ -315,6 +322,20 @@ class LifecycleTest(HarnessTest):
         self.write_test()
         self.assertIn("acceptance tests exited with 1, not 2 (tests.red_exit)", self.fails("check", "S-001"))
         self.repo.write(".agents/config.toml", CONFIG + "red_exit = [1]\n")
+        self.ok("advance", "S-001")
+
+    def test_slice_command_can_select_tests_by_name(self):
+        self.repo.write(".agents/config.toml", f"""[tests]
+paths = ["tests"]
+slice = ['{sys.executable}', "-m", "unittest", "discover", "-s", "{{dirs}}", "-t", ".", "-k", "{{ident}}"]
+full = ['{sys.executable}', "-c", "pass"]
+""")
+        self.repo.write("tests/test_other.py", "import unittest\n\n\nclass Other(unittest.TestCase):\n    def test_unrelated(self):\n        self.fail()\n")
+        self.new_slice()
+        self.ok("advance", "S-001")
+        self.repo.write("tests/test_s001.py", ACCEPTANCE_TEST.format(id="S-001").replace("test_greets_by_name", "test_S001_greets_by_name"))
+        self.assertIn("-k S001", self.ok("advance", "S-001"))
+        self.repo.write("app/greet.py", IMPLEMENTATION)
         self.ok("advance", "S-001")
 
     def test_reopen_unfreezes_acceptance_tests(self):

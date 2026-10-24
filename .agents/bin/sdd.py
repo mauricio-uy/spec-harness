@@ -28,7 +28,8 @@ Commands (run from anywhere inside the repository):
 Optional configuration in .agents/config.toml:
   [tests]
   paths = ["tests"]         # where to look for acceptance test tags (default: whole repo)
-  slice = "pytest {files}"  # runs the slice's acceptance test files
+  slice = "pytest {files}"  # runs the slice's acceptance tests: {files} and {dirs} expand to their
+                            # files and folders, {id} to S-012 and {ident} to S012 (for test names)
   full = "pytest"           # runs the full suite
   support = ["tests/acceptance/helpers"]  # acceptance helpers frozen with the tests (globs or folders)
   red_exit = [1]            # exit codes that count as failing on missing behavior (default: any but 0)
@@ -75,7 +76,7 @@ PLACEHOLDERS = (
     "S-XXX", "I-XXX", "ADR-XXX", "YYYY-MM-DD", "<short title>", "<capability>", "<who",
     "<context>", "<action>", "<observable result>", "<test name>", "<unit>",
 )
-SKIP_DIRS = {".git", ".agents", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", "target"}
+SKIP_DIRS = {".git", ".agents", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", "target", "vendor", "obj", ".gradle"}
 FRONT_RE = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
 AC_RE = re.compile(r"^\s*-\s*(~~)?\s*\*\*AC-(\d+):\*\*\s*(.*)$", re.M)
@@ -316,12 +317,25 @@ def digest(relative: str) -> str:
     return hashlib.sha256((ROOT / relative).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
 
 
-def run_tests(config: dict, kind: str, files: list[str] = ()) -> tuple[int | None, str]:
+def expand(args: list[str], slice_id: str, files: list[str]) -> list[str]:
+    """Fill a test command: `{files}` and `{dirs}` become one argument per test file or folder,
+    and `{id}` (`S-012`) and `{ident}` (`S012`, valid in test names) are replaced inside any argument."""
+    dirs = sorted({"./" + parent if (parent := Path(f).parent.as_posix()) != "." else "." for f in files})
+    expanded = []
+    for arg in args:
+        if arg in ("{files}", "{dirs}"):
+            expanded += files if arg == "{files}" else dirs
+        else:
+            expanded.append(arg.replace("{id}", slice_id).replace("{ident}", slice_id.replace("-", "")))
+    return expanded
+
+
+def run_tests(config: dict, kind: str, slice_id: str, files: list[str] = ()) -> tuple[int | None, str]:
     command = config.get("tests", {}).get(kind)
     if not command:
         return None, f"tests.{kind} is not configured in .agents/config.toml"
     args = shlex.split(command, posix=os.name != "nt") if isinstance(command, str) else [str(a) for a in command]
-    args = [item for arg in args for item in (files if arg == "{files}" else [arg])]
+    args = expand(args, slice_id, list(files))
     args[0] = shutil.which(args[0]) or args[0]
     print("$ " + " ".join(args), flush=True)
     try:
@@ -383,7 +397,7 @@ def gate_red(sl: Slice, config: dict, run: bool) -> list[str]:
         if status != "accepted":
             errors.append(f"{ref} is {status}; accept it with `sdd.py accept {ref}` once the user approves the spec")
     if run and not errors:
-        code, error = run_tests(config, "slice", all_files(found))
+        code, error = run_tests(config, "slice", sl.id, all_files(found))
         expected = [int(c) for c in as_list(config.get("tests", {}).get("red_exit"))]
         if error:
             errors.append(error)
@@ -414,7 +428,7 @@ def gate_green(sl: Slice, config: dict, run: bool) -> list[str]:
         errors.append(f"support file added after freeze: {path} (reopen the slice to change acceptance tests)")
     if run and not errors:
         for kind, files in (("slice", tests), ("full", [])):
-            code, error = run_tests(config, kind, files)
+            code, error = run_tests(config, kind, sl.id, files)
             if error or code != 0:
                 errors.append(error or f"tests.{kind} failed")
                 break

@@ -30,7 +30,7 @@ Give every agent working on the project a shared base: what the system is, the w
 
    When the code uses two names for one concept, ask the user which one wins.
 5. **Configuration**: propose `.agents/config.toml` to the user:
-   - `[tests]`: the project's test runner, for the slice's acceptance tests (`{files}`) and the full suite; `support`, the folder for acceptance fixtures and helpers; `red_exit`, when the runner exits with a distinct code for failing tests (see `sdd-red`).
+   - `[tests]`: the project's test runner, for the slice's acceptance tests and the full suite. Runners that select tests by package or by name (Go, Gradle, Maven, .NET) use the `{dirs}` and `{ident}` placeholders instead of `{files}`; `support`, the folder for acceptance fixtures and helpers; `red_exit`, when the runner exits with a distinct code for failing tests (see `sdd-red`).
    - `[[units]]`: one per independently released package or service; omit for a single release unit.
 6. **Pull requests and releases**: each slice is one branch and one squash-merged pull request, released after the merge. On GitHub, propose the setup in [the GitHub guide](references/github.md), in its order:
    1. add [the check workflow](assets/check.yml) and [the release workflow](assets/release.yml) in one pull request, and merge it;

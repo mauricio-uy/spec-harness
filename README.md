@@ -91,7 +91,7 @@ In your project, the harness creates its documents under `.agents/docs/`:
 ```toml
 [tests]
 paths = ["tests"]          # where acceptance tests live
-slice = "pytest {files}"   # runs the slice's acceptance test files
+slice = "pytest {files}"   # runs the slice's acceptance tests: {files}, {dirs}, {id} or {ident} select them
 full = "pytest"            # runs the full suite
 support = ["tests/acceptance/helpers"]   # fixtures and helpers frozen with the acceptance tests
 red_exit = [1]             # exit codes of tests that fail on missing behavior (default: any but 0)
