@@ -21,7 +21,7 @@ Make the frozen acceptance tests pass with the simplest design that satisfies th
 
 ## Rules
 
-- **Never modify, delete or skip a file listed in the slice's `.frozen.json`.** If an acceptance test looks wrong, stop and tell the user; the fix goes through `sdd-spec` (reopen).
+- **Never modify, delete or skip a file listed in the slice's `.frozen.json`.** They include the acceptance fixtures and helpers under `tests.support`. If an acceptance test looks wrong, stop and tell the user; the fix goes through `sdd-spec` (reopen).
 - Stay inside the spec's **Boundaries**. Touching a module not listed under **Touches** is either a spec amendment or a deviation to record in `close.md`; ask when in doubt.
 - Follow `plan.md` (or the plan sections in `spec.md`) when present, ticking tasks as they pass.
 

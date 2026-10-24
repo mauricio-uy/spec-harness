@@ -290,6 +290,33 @@ class LifecycleTest(HarnessTest):
         self.assertFalse(self.repo.exists(".agents/docs/changes/S-001-greet"))
         self.assertIn("status: done", self.repo.read(".agents/docs/archive/S-001-greet/spec.md"))
 
+    def test_support_files_are_frozen_with_the_acceptance_tests(self):
+        self.repo.write(".agents/config.toml", CONFIG + 'support = ["tests/support"]\n')
+        self.repo.write("tests/support/__init__.py", "")
+        self.repo.write("tests/support/names.py", 'NAME = "Ana"\n')
+        self.new_slice()
+        self.to_red()
+        frozen = self.repo.read(".agents/docs/changes/S-001-greet/.frozen.json")
+        self.assertIn("tests/support/names.py", frozen)
+        self.repo.write("app/greet.py", IMPLEMENTATION)
+        self.repo.write("tests/support/names.py", 'NAME = "Bob"\n')
+        self.repo.write("tests/support/conftest.py", "")
+        out = self.fails("check", "S-001")
+        self.assertIn("frozen support file modified: tests/support/names.py", out)
+        self.assertIn("support file added after freeze: tests/support/conftest.py", out)
+        self.repo.write("tests/support/names.py", 'NAME = "Ana"\n')
+        (self.repo.root / "tests/support/conftest.py").unlink()
+        self.ok("advance", "S-001")
+
+    def test_red_exit_rejects_tests_failing_for_another_reason(self):
+        self.repo.write(".agents/config.toml", CONFIG + "red_exit = [2]\n")
+        self.new_slice()
+        self.ok("advance", "S-001")
+        self.write_test()
+        self.assertIn("acceptance tests exited with 1, not 2 (tests.red_exit)", self.fails("check", "S-001"))
+        self.repo.write(".agents/config.toml", CONFIG + "red_exit = [1]\n")
+        self.ok("advance", "S-001")
+
     def test_reopen_unfreezes_acceptance_tests(self):
         folder = self.new_slice()
         self.to_red()
