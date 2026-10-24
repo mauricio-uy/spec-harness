@@ -40,6 +40,7 @@ Record what was delivered, fold it into the living spec and hand the slice over 
 3. Run `sdd.py pr <ID>`. It prints the pull request title (a Conventional Commit subject built from the spec) and body: goal, acceptance criteria, notes from `close.md`, and the `Slice:` trailer last.
 4. **Checkpoint**: show the user the title, the body and the branch's changes, and wait for confirmation.
 5. Push the branch and open the pull request with exactly that title and body, e.g. `gh pr create --title "$(sdd.py pr <ID> --title)" --body "$(sdd.py pr <ID> --body)"`. Do not edit the trailers.
-6. Do not merge unless the user asks. When asked, merge with **squash**, using the pull request title and body as the commit message, so the slice reaches `main` as one commit carrying the `Slice:` trailer.
+6. If the review requests changes, apply them with `sdd-revise`.
+7. Do not merge unless the user asks. When asked, merge with **squash**, using the pull request title and body as the commit message, so the slice reaches `main` as one commit carrying the `Slice:` trailer.
 
 After the merge, the slice is released on `main` by the release workflow, or with `sdd-release` where there is none.

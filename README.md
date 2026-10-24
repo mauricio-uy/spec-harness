@@ -20,7 +20,7 @@ sdd-idea ──► sdd-spec ──► sdd-red ──► sdd-green ──► sdd-
                    ✋            ✋                          ✋
 ```
 
-✋ marks a checkpoint: the skill stops and waits for approval. The release runs after the merge, from a CI workflow or locally with `sdd-release`, and covers every slice merged since the last release.
+✋ marks a checkpoint: the skill stops and waits for approval. Review changes before the merge go through `sdd-revise`, on the same branch and pull request. The release runs after the merge, from a CI workflow or locally with `sdd-release`, and covers every slice merged since the last release.
 
 On GitHub, `sdd-init` proposes two workflows: **check** runs `sdd.py verify` on every pull request, so the rules hold even when a skill is skipped, and **release** cuts the release on every push to `main`.
 
@@ -37,6 +37,7 @@ The skills follow the [Agent Skills](https://agentskills.io/specification) stand
 | `sdd-red`     | Write the failing acceptance tests and freeze them                              |
 | `sdd-green`   | Implement with TDD until the frozen tests and the full suite pass               |
 | `sdd-close`   | Close the slice, merge it into the living spec and open its pull request        |
+| `sdd-revise`  | Apply review feedback to a closed slice's pull request before it is merged      |
 | `sdd-release` | Release merged slices, check releases, render the changelog and declare `1.0.0` |
 | `sdd-next`    | Run the next phase of a slice, stopping at checkpoints                          |
 | `sdd-status`  | Report work in progress and what comes next                                     |
@@ -52,10 +53,10 @@ The skills follow the [Agent Skills](https://agentskills.io/specification) stand
 | `status [SLICE]`                             | List open slices, or show one slice and its next gate                             |
 | `check SLICE`                                | Verify the gate to the next status, running tests when needed                     |
 | `advance SLICE`                              | Check the gate and move the slice to the next status                              |
-| `reopen SLICE`                               | Send a slice back to draft and unfreeze its acceptance tests                      |
+| `reopen SLICE [--base REF]`                  | Send a slice back to draft and unfreeze its tests, if closed only until merged    |
 | `accept ADR`                                 | Accept a proposed ADR and supersede the one it replaces                           |
 | `lint`                                       | Check links, ID references, criterion-to-test traceability and vocabulary         |
-| `verify [--base REF] [--title T] [--body B]` | For CI on pull requests: `lint`, frozen tests intact, slice closed, title in line |
+| `verify [--base REF] [--title T] [--body B]` | For CI on pull requests: `lint`, gates still met, slice closed, title in line     |
 | `next-id {idea,slice,adr}`                   | Print the next free ID                                                            |
 | `pr SLICE [--title\|--body]`                 | Print the pull request title and body of a closed slice                           |
 | `release [--apply]`                          | After merging, tag every slice merged since the last release, with its notes      |
