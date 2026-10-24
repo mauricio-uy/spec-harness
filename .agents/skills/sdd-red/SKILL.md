@@ -28,19 +28,24 @@ The gate runs the tests through `.agents/config.toml`. If `[tests]` is missing, 
 paths = ["tests"]          # where acceptance tests live
 slice = "pytest {files}"   # {files} expands to the slice's acceptance test files
 full = "pytest"            # the whole suite
+support = ["tests/acceptance/conftest.py", "tests/acceptance/helpers"]   # optional, frozen with the tests
+red_exit = [1]             # optional: pytest exits 1 when tests fail, 2 on collection errors, 5 with no tests
 ```
+
+- `support`: the fixtures and helpers that acceptance tests rely on, as globs or folders. They are frozen with the slice's tests, so a test cannot be made to pass by changing what surrounds it. Fixtures for unit tests go elsewhere.
+- `red_exit`: the runner's exit codes for tests that ran and failed. Set it when the runner tells failures apart from broken tests (pytest, jest: `[1]`); leave it out when it does not (unittest).
 
 ## Steps
 
 1. Read `.agents/docs/changes/<ID>-*/spec.md`: criteria, boundaries and constraints. The user approved the spec, and with it every ADR in its `adrs` field: run `sdd.py accept <ADR>` for each one still `proposed`.
-2. Write the tests in **dedicated files for this slice**, following the project's test conventions (for example `tests/acceptance/test_s012_reset_password.py`). The gate freezes whole files, so do not mix them with other tests.
+2. Write the tests in **dedicated files for this slice**, following the project's test conventions (for example `tests/acceptance/test_s012_reset_password.py`). The gate freezes whole files, so do not mix them with other tests. Put the fixtures and helpers they need under `tests.support`.
 3. One or more tests per active criterion. Each test:
    - carries the tag `<ID>/AC-n` in its name, a marker or a comment next to it;
    - drives the slice through its **Input** boundary and asserts on its **Output**, never on internals;
    - follows the criterion's Given/When/Then literally.
 4. Do not write implementation. When the language needs it to compile, add only empty stubs at the boundary (signatures that raise "not implemented").
 5. Run `sdd.py check <ID>` and read the test output: every test must fail on a missing behavior (assertion, not-implemented stub, missing endpoint). A syntax error, a bad import of test helpers or a misconfigured runner is a broken test: fix it.
-6. Run `sdd.py advance <ID>`: the tests are frozen in `.frozen.json`.
+6. Run `sdd.py advance <ID>`: the tests, and the files under `tests.support`, are frozen in `.frozen.json`.
 
 ## Checkpoint
 

@@ -5,7 +5,7 @@ A minimalist harness for AI coding agents that combines spec-driven development 
 ## Principles
 
 - **Vertical slices.** One user-observable behavior per slice, 1–6 acceptance criteria, explicit boundaries and an explicit out of scope.
-- **Specs are the contract, tests are the proof.** Each acceptance criterion becomes a test before any implementation exists, and those tests are frozen.
+- **Specs are the contract, tests are the proof.** Each acceptance criterion becomes a test before any implementation exists, and those tests are frozen together with their fixtures.
 - **Gates, not approvals.** A stdlib-only Python CLI verifies every transition. People step in at three checkpoints only: the spec, the acceptance tests and the pull request.
 - **Living spec.** Closed slices merge into a spec of how the system behaves today, traceable to its tests.
 - **One slice, one pull request.** Each slice lives on its own branch and is squash-merged as one Conventional Commit carrying a `Slice:` trailer.
@@ -93,6 +93,8 @@ In your project, the harness creates its documents under `.agents/docs/`:
 paths = ["tests"]          # where acceptance tests live
 slice = "pytest {files}"   # runs the slice's acceptance test files
 full = "pytest"            # runs the full suite
+support = ["tests/acceptance/helpers"]   # fixtures and helpers frozen with the acceptance tests
+red_exit = [1]             # exit codes of tests that fail on missing behavior (default: any but 0)
 
 [[units]]                  # release units; omit for a single unit tagged vX.Y.Z
 name = "api"

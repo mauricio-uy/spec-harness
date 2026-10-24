@@ -30,6 +30,8 @@ Optional configuration in .agents/config.toml:
   paths = ["tests"]         # where to look for acceptance test tags (default: whole repo)
   slice = "pytest {files}"  # runs the slice's acceptance test files
   full = "pytest"           # runs the full suite
+  support = ["tests/acceptance/helpers"]  # acceptance helpers frozen with the tests (globs or folders)
+  red_exit = [1]            # exit codes that count as failing on missing behavior (default: any but 0)
 
   [[units]]                 # release units (default: one unit at the repository root)
   name = "api"
@@ -45,6 +47,7 @@ if sys.version_info < (3, 11):
     sys.exit("error: Python 3.11+ is required")
 
 import argparse
+import fnmatch
 import hashlib
 import json
 import os
@@ -294,6 +297,21 @@ def all_files(found: dict[int, set[str]]) -> list[str]:
     return sorted(set().union(*found.values())) if found else []
 
 
+def support_files(config: dict) -> set[str]:
+    """Files matching `tests.support`: helpers and fixtures frozen with the acceptance tests."""
+    found = set()
+    for pattern in config.get("tests", {}).get("support", []):
+        for path in ROOT.glob(pattern.strip("/")):
+            for file in [path] if path.is_file() else walk(path) if path.is_dir() else []:
+                found.add(file.relative_to(ROOT).as_posix())
+    return found
+
+
+def is_support(relative: str, config: dict) -> bool:
+    patterns = [p.strip("/") for p in config.get("tests", {}).get("support", [])]
+    return any(fnmatch.fnmatchcase(relative, p) or fnmatch.fnmatchcase(relative, p + "/*") for p in patterns)
+
+
 def digest(relative: str) -> str:
     return hashlib.sha256((ROOT / relative).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
 
@@ -366,10 +384,14 @@ def gate_red(sl: Slice, config: dict, run: bool) -> list[str]:
             errors.append(f"{ref} is {status}; accept it with `sdd.py accept {ref}` once the user approves the spec")
     if run and not errors:
         code, error = run_tests(config, "slice", all_files(found))
+        expected = [int(c) for c in as_list(config.get("tests", {}).get("red_exit"))]
         if error:
             errors.append(error)
         elif code == 0:
             errors.append("acceptance tests pass; they must fail before implementation")
+        elif expected and code not in expected:
+            errors.append(f"acceptance tests exited with {code}, not {' or '.join(map(str, expected))} (tests.red_exit): "
+                          "they must fail on missing behavior, not on a broken test or runner")
     return errors
 
 
@@ -379,15 +401,19 @@ def gate_green(sl: Slice, config: dict, run: bool) -> list[str]:
     if not frozen_path.exists():
         return ["no frozen acceptance tests (.frozen.json); advance the slice from ready first"]
     frozen = json.loads(frozen_path.read_text(encoding="utf-8"))
+    tests = all_files(tagged_tests(sl, config))
     for path, expected in frozen.items():
+        kind = "support file" if path not in tests and is_support(path, config) else "acceptance test"
         if not (ROOT / path).exists():
-            errors.append(f"frozen acceptance test removed: {path}")
+            errors.append(f"frozen {kind} removed: {path}")
         elif digest(path) != expected:
-            errors.append(f"frozen acceptance test modified: {path}")
-    for path in sorted(set(all_files(tagged_tests(sl, config))) - set(frozen)):
+            errors.append(f"frozen {kind} modified: {path}")
+    for path in sorted(set(tests) - set(frozen)):
         errors.append(f"acceptance test added after freeze: {path} (reopen the slice to change acceptance tests)")
+    for path in sorted(support_files(config) - set(frozen)):
+        errors.append(f"support file added after freeze: {path} (reopen the slice to change acceptance tests)")
     if run and not errors:
-        for kind, files in (("slice", list(frozen)), ("full", [])):
+        for kind, files in (("slice", tests), ("full", [])):
             code, error = run_tests(config, kind, files)
             if error or code != 0:
                 errors.append(error or f"tests.{kind} failed")
@@ -746,7 +772,7 @@ def cmd_advance(args, config) -> int:
     if report(sl, GATES[sl.status](sl, config, run=True)):
         return 1
     if target == "red":
-        frozen = {path: digest(path) for path in all_files(tagged_tests(sl, config))}
+        frozen = {path: digest(path) for path in sorted(set(all_files(tagged_tests(sl, config))) | support_files(config))}
         (sl.dir / ".frozen.json").write_text(json.dumps(frozen, indent=2) + "\n", encoding="utf-8")
     set_front(sl.spec, "status", target)
     if target == "done":
