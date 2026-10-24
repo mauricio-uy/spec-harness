@@ -18,6 +18,7 @@ ASSETS = {
     "spec": HARNESS / "skills" / "sdd-spec" / "assets" / "spec.md",
     "adr": HARNESS / "skills" / "sdd-adr" / "assets" / "adr.md",
     "idea": HARNESS / "skills" / "sdd-idea" / "assets" / "idea.md",
+    "fix": HARNESS / "skills" / "sdd-fix" / "assets" / "fix.md",
 }
 
 _spec = importlib.util.spec_from_file_location("sdd", CLI)
@@ -361,6 +362,52 @@ full = ['{sys.executable}', "-c", "pass"]
         merged = self.merge()
         self.assertIn(f"S-001 is merged into {merged}", self.fails("reopen", "S-001", "--base", merged))
         self.assertIn("base ref origin/main not found", self.fails("reopen", "S-001"))
+
+
+class FixTest(HarnessTest):
+    BUG = "# Bug\n\n- **Actual:** greet raises an error.\n- **Expected:** greet returns a greeting.\n\n# Scope"
+
+    def fix_slice(self, change="fixed") -> str:
+        spec = f"{self.new_slice(change=change)}/spec.md"
+        text = self.repo.read(spec).replace("status: draft", "status: draft\ntrack: fix", 1)
+        self.repo.write(spec, text.replace("# Scope", self.BUG, 1))
+        return spec
+
+    def test_filled_template_passes_ready(self):
+        text = ASSETS["fix"].read_text(encoding="utf-8")
+        self.repo.write(".agents/docs/changes/S-001-x/spec.md", text)
+        out = self.fails("check", "S-001")
+        self.assertIn("placeholder left in spec.md", out)
+        self.assertIn("bug 'Actual' is empty", out)
+        text = re.sub(r"^idea:.*\n", "", text, flags=re.M).replace("S-XXX", "S-001").replace("<short title>", "Greet by name")
+        text = text.replace("<capability>", "greeting").replace("<!-- One sentence: who gets the right behavior, and what it is. -->", "Users are greeted by name.")
+        text = re.sub(r"(\*\*\w+:\*\*) <!--.*?-->", r"\1 none", text)
+        text = re.sub(r"- \*\*AC-1:\*\*.*", '- **AC-1:** Given the name "Ana", when greet is called, then it returns "Hello, Ana!".', text)
+        self.repo.write(".agents/docs/changes/S-001-x/spec.md", text)
+        self.ok("advance", "S-001")
+
+    def test_fix_slice_goes_to_sdd_fix_until_red(self):
+        self.fix_slice()
+        self.assertIn("-> sdd-fix", self.ok("status"))
+        self.ok("advance", "S-001")
+        self.assertIn("next skill: sdd-fix", self.ok("status", "S-001"))
+        self.write_test()
+        self.ok("advance", "S-001")
+        self.assertIn("next skill: sdd-green", self.ok("status", "S-001"))
+
+    def test_fix_slice_stays_small(self):
+        spec = self.fix_slice(change="added")
+        self.write_adr("ADR-001")
+        text = self.repo.read(spec).replace("adrs: []", "adrs: [ADR-001]").replace("- **Actual:** greet raises an error.", "- **Actual:**")
+        acs = "".join(f"- **AC-{n}:** Given a name, when greet is called, then it greets.\n" for n in (2, 3))
+        self.repo.write(spec, text.replace("\n\n# Open questions", "\n" + acs + "\n# Open questions"))
+        self.repo.write(spec.replace("spec.md", "plan.md"), "# Approach\n")
+        out = self.fails("check", "S-001")
+        for problem in ("bug 'Actual' is empty", "changes behavior as fixed or security", "at most 2 acceptance criteria",
+                        "has no plan", "accepted ADRs only, not ADR-001"):
+            self.assertIn(problem, out)
+        self.repo.write(spec, self.repo.read(spec).replace("track: fix", "track: quick"))
+        self.assertIn("track must be 'fix' or absent, not 'quick'", self.fails("check", "S-001"))
 
 
 class PullRequestTest(HarnessTest):

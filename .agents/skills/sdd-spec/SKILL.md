@@ -21,6 +21,8 @@ Produce a spec that states **what** the slice does and how to know it is done, p
 
 ## New slice
 
+A bug fix that needs at most two criteria goes through `sdd-fix` instead, and a change that keeps behavior needs no slice.
+
 1. Get an ID with `sdd.py next-id slice`. It also counts `slice/*` branches, so create the slice branch right away from an up-to-date `main`: `git switch -c slice/<ID>-<slug>`. A slice is one branch and one pull request; skip the branch only if the user commits directly to `main`.
 2. Create `.agents/docs/changes/<ID>-<slug>/` and copy [the spec template](assets/spec.md) into it as `spec.md`.
 3. Fill the front matter:

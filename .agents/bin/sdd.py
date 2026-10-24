@@ -63,6 +63,9 @@ from urllib.parse import unquote
 
 STATUSES = ["draft", "ready", "red", "green", "done"]
 NEXT_SKILL = {"draft": "sdd-spec", "ready": "sdd-red", "red": "sdd-green", "green": "sdd-close"}
+# A fix slice (`track: fix`) is specified and given its failing tests by sdd-fix, with one checkpoint.
+FIX_SKILL = {"draft": "sdd-fix", "ready": "sdd-fix"}
+FIX_CHANGES, FIX_MAX_ACS = ("fixed", "security"), 2
 # change type -> (conventional commit type, changelog category, version bump)
 CHANGES = {
     "added": ("feat", "Added", "minor"),
@@ -98,7 +101,8 @@ AGENTS_BLOCK = f"""{AGENTS_BEGIN}
 - Read `.agents/docs/overview.md` for what the system is, and use the vocabulary in `.agents/docs/glossary.md`.
 - System behavior, accepted decisions and work in progress are indexed in `.agents/docs/index.md`. Read it before changing behavior.
 - Follow the accepted ADRs listed there.
-- Behavior changes go through a slice, using the `sdd-*` skills in `.agents/skills/`.
+- Behavior changes go through a slice, using the `sdd-*` skills in `.agents/skills/`; a bug fix through `sdd-fix`.
+- Changes that keep behavior (refactors, docs, CI, dependency updates) need no slice: one pull request with a Conventional Commit title.
 - Never edit the files listed in a slice's `.frozen.json`: its acceptance tests and their support files.
 - Reference harness documents by ID (`S-012`, `S-012/AC-1`, `ADR-003`), never by path.
 {AGENTS_END}"""
@@ -244,6 +248,10 @@ class Slice:
     def adrs(self) -> list[str]:
         return as_list(self.front.get("adrs"))
 
+    def next_skill(self) -> str:
+        fix = FIX_SKILL if self.front.get("track") == "fix" else {}
+        return fix.get(self.status) or NEXT_SKILL.get(self.status, "")
+
 
 def as_list(value) -> list[str]:
     return value if isinstance(value, list) else [value] if value else []
@@ -380,6 +388,31 @@ def gate_ready(sl: Slice, config: dict, run: bool) -> list[str]:
     if content(found.get("Open questions", "")):
         errors.append("open questions remain")
     errors += [f"placeholder left in spec.md: {p}" for p in placeholders(sl.text)]
+    errors += fix_problems(sl, adrs)
+    return errors
+
+
+def fix_problems(sl: Slice, adrs: dict) -> list[str]:
+    """A fix slice stays small; past these limits it continues as a regular slice without `track: fix`."""
+    track = sl.front.get("track")
+    if not track:
+        return []
+    if track != "fix":
+        return [f"front matter: track must be 'fix' or absent, not '{track}'"]
+    errors = []
+    for label in ("Actual", "Expected"):
+        match = re.search(rf"\*\*{label}:\*\*[ \t]*(\S.*)?", sections(sl.body).get("Bug", ""))
+        if not match or not match.group(1):
+            errors.append(f"bug '{label}' is empty")
+    if sl.front.get("change") not in FIX_CHANGES:
+        errors.append(f"a fix slice changes behavior as {' or '.join(FIX_CHANGES)}; remove 'track: fix' for any other change")
+    if len(sl.acs) > FIX_MAX_ACS:
+        errors.append(f"a fix slice has at most {FIX_MAX_ACS} acceptance criteria; remove 'track: fix' to continue as a regular slice")
+    if (sl.dir / "plan.md").exists() or "Approach" in sections(sl.body):
+        errors.append("a fix slice has no plan; remove 'track: fix' to continue as a regular slice")
+    proposed = [ref for ref in sl.adrs() if ref in adrs and adrs[ref][1].get("status") == "proposed"]
+    if proposed:
+        errors.append(f"a fix slice follows accepted ADRs only, not {', '.join(proposed)}; remove 'track: fix' to propose one")
     return errors
 
 
@@ -757,7 +790,7 @@ def cmd_status(args, config) -> int:
         print(f"  criteria:   {', '.join(f'AC-{n}' for n, _ in sl.acs) or 'none'}")
         if sl.status == "done":
             return 0
-        print(f"  next skill: {NEXT_SKILL[sl.status]}")
+        print(f"  next skill: {sl.next_skill()}")
         report(sl, GATES[sl.status](sl, config, run=False))
         return 0
     slices = open_slices()
@@ -765,7 +798,7 @@ def cmd_status(args, config) -> int:
         print("no open slices")
     adrs = load_adrs()
     for sl in slices:
-        print(f"{sl.id:<7} {sl.status:<6} {sl.front.get('title', ''):<40} -> {NEXT_SKILL.get(sl.status, '')}")
+        print(f"{sl.id:<7} {sl.status:<6} {sl.front.get('title', ''):<40} -> {sl.next_skill()}")
         for ref in sl.adrs():
             if ref in adrs and adrs[ref][1].get("status") == "superseded":
                 print(f"  warning: follows {ref}, superseded by {adrs[ref][1].get('superseded_by') or 'another ADR'}")

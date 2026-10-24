@@ -34,3 +34,5 @@ Read-only overview of the work. Never edit files from this skill.
 | ready  | `sdd-red`   | user approval of the spec             |
 | red    | `sdd-green` | user approval of the acceptance tests |
 | green  | `sdd-close` | close and pull request                |
+
+A fix slice (`track: fix`) shows `sdd-fix` in `draft` and `ready`, waiting for spec completion and then for user approval of the spec and its failing tests together.
