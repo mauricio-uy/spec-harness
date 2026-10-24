@@ -98,7 +98,7 @@ AGENTS_BLOCK = f"""{AGENTS_BEGIN}
 - System behavior, accepted decisions and work in progress are indexed in `.agents/docs/index.md`. Read it before changing behavior.
 - Follow the accepted ADRs listed there.
 - Behavior changes go through a slice, using the `sdd-*` skills in `.agents/skills/`.
-- Never edit acceptance tests listed in a slice's `.frozen.json`.
+- Never edit the files listed in a slice's `.frozen.json`: its acceptance tests and their support files.
 - Reference harness documents by ID (`S-012`, `S-012/AC-1`, `ADR-003`), never by path.
 {AGENTS_END}"""
 ID_RE = re.compile(r"\b(?:S|I|ADR)-\d{3,}\b")
